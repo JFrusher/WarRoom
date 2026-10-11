@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -22,12 +21,16 @@ log = logging.getLogger("blue.monitor")
 
 
 def tail(path: Path) -> Iterator[str]:
-    """Yield new lines appended to ``path``, waiting for the file to appear."""
+    """Yield lines from ``path`` from the start, then keep yielding new ones.
+
+    Reading from the beginning avoids a startup race: the target's health
+    check creates the log before the blue team attaches, so an attack logged
+    in that window would be missed if we seeked to the end.
+    """
     while not path.exists():
         log.info("waiting for %s", path)
         time.sleep(1.0)
     with path.open("r") as fh:
-        fh.seek(0, os.SEEK_END)
         while True:
             line = fh.readline()
             if not line:
