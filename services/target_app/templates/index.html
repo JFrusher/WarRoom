@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AcmeOps Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 antialiased">
+  <div class="mx-auto max-w-3xl px-4 py-10 space-y-10">
+    <header class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">AcmeOps Console</h1>
+        <p class="text-sm text-slate-400">Internal operations dashboard</p>
+      </div>
+      <div class="text-right text-xs text-slate-500">
+        <div>sqli patch: <span class="{{ 'text-emerald-400' if patched.sqli else 'text-rose-400' }}">{{ 'on' if patched.sqli else 'off' }}</span></div>
+        <div>xss patch: <span class="{{ 'text-emerald-400' if patched.xss else 'text-rose-400' }}">{{ 'on' if patched.xss else 'off' }}</span></div>
+        <div>cmdi patch: <span class="{{ 'text-emerald-400' if patched.cmdi else 'text-rose-400' }}">{{ 'on' if patched.cmdi else 'off' }}</span></div>
+      </div>
+    </header>
+
+    <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+      <h2 class="mb-4 text-lg font-medium">Sign in</h2>
+      <form id="login-form" class="space-y-3">
+        <input name="username" placeholder="username" class="w-full rounded-md bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+        <input name="password" type="password" placeholder="password" class="w-full rounded-md bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">Authenticate</button>
+      </form>
+      <pre id="login-out" class="mt-3 overflow-x-auto text-xs text-slate-400"></pre>
+    </section>
+
+    <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+      <h2 class="mb-4 text-lg font-medium">Team notes</h2>
+      <form id="comment-form" class="mb-5 space-y-3">
+        <input name="author" placeholder="your name" class="w-full rounded-md bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+        <textarea name="body" placeholder="leave a note" rows="2" class="w-full rounded-md bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+        <button class="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-600">Post note</button>
+      </form>
+      <ul class="space-y-3">
+        {% for c in comments %}
+          <li class="rounded-md bg-slate-800/60 px-3 py-2 text-sm">
+            <span class="font-medium text-indigo-300">{{ c.author | safe }}</span>
+            <div class="text-slate-300">{{ c.body | safe }}</div>
+          </li>
+        {% else %}
+          <li class="text-sm text-slate-500">No notes yet.</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+      <h2 class="mb-4 text-lg font-medium">Network diagnostics</h2>
+      <form id="ping-form" class="flex gap-2">
+        <input name="host" placeholder="127.0.0.1" class="flex-1 rounded-md bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+        <button class="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-600">Ping</button>
+      </form>
+      <pre id="ping-out" class="mt-3 overflow-x-auto text-xs text-slate-400"></pre>
+    </section>
+  </div>
+
+  <script>
+    const post = (url, data) =>
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((r) => r.json());
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const out = await post("/api/v1/auth/login", {
+        username: f.get("username"),
+        password: f.get("password"),
+      });
+      document.getElementById("login-out").textContent = JSON.stringify(out, null, 2);
+    });
+
+    document.getElementById("comment-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      await post("/api/v1/comments", { author: f.get("author"), body: f.get("body") });
+      location.reload();
+    });
+
+    document.getElementById("ping-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const out = await post("/api/v1/diagnostics/ping", { host: f.get("host") });
+      document.getElementById("ping-out").textContent = JSON.stringify(out, null, 2);
+    });
+  </script>
+</body>
+</html>
