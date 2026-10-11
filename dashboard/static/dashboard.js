@@ -3,7 +3,8 @@
 const socket = io();
 
 const el = (id) => document.getElementById(id);
-const vectorCounts = { sqli: 0, xss: 0, cmdi: 0 };
+const vectorCounts = { sqli: 0, xss: 0, cmdi: 0, idor: 0, ssrf: 0 };
+const techniques = new Set();
 
 const chart = new Chart(el("score-chart"), {
   type: "bar",
@@ -63,6 +64,23 @@ function renderVectorTally() {
     .join("");
 }
 
+function renderTechniques() {
+  el("attack").innerHTML = "";
+  if (techniques.size === 0) {
+    const empty = document.createElement("span");
+    empty.className = "text-slate-500";
+    empty.textContent = "none yet";
+    el("attack").appendChild(empty);
+    return;
+  }
+  for (const t of [...techniques].sort()) {
+    const chip = document.createElement("span");
+    chip.className = "rounded-full bg-indigo-500/20 px-2 py-0.5 text-indigo-300";
+    chip.textContent = t;
+    el("attack").appendChild(chip);
+  }
+}
+
 function pushEvent(event) {
   const colors = { red: "text-rose-400", blue: "text-sky-400" };
   const li = document.createElement("li");
@@ -77,7 +95,9 @@ function pushEvent(event) {
   for (const v of event.vectors || (event.vector ? [event.vector] : [])) {
     if (v in vectorCounts) vectorCounts[v] += 1;
   }
+  for (const t of event.techniques || []) techniques.add(t);
   renderVectorTally();
+  renderTechniques();
 }
 
 socket.on("connect", () => setConnected(true));
@@ -91,6 +111,7 @@ socket.on("snapshot", (snap) => {
   // rendered history instead of duplicating it and double-counting vectors.
   el("feed").innerHTML = "";
   for (const v of Object.keys(vectorCounts)) vectorCounts[v] = 0;
+  techniques.clear();
   snap.events.forEach(pushEvent);
 });
 
@@ -100,3 +121,4 @@ socket.on("sla", (data) => (el("uptime").textContent = `${data.uptime}%`));
 socket.on("event", pushEvent);
 
 renderVectorTally();
+renderTechniques();

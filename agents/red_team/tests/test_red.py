@@ -5,7 +5,7 @@ import pytest
 import requests
 
 from config import settings
-from src import client, obfuscate
+from src import campaign, client, obfuscate, profiles
 from src.errors import ExploitFailed
 from src.exploits import sqli
 
@@ -58,3 +58,17 @@ def test_capture_converts_transport_error_to_exploitfailed(monkeypatch):
     monkeypatch.setattr(sess, "post", boom)
     with pytest.raises(ExploitFailed):
         sqli.capture(sess)
+
+
+def test_profiles_control_payload_order():
+    profiles.use("loud")
+    assert profiles.payload_order("plain", "obf") == ("plain", "obf")
+    profiles.use("stealth")
+    assert profiles.payload_order("plain", "obf") == ("obf", "plain")
+    profiles.use("loud")  # reset for other tests
+
+
+def test_campaign_chain_covers_every_exploit_vector():
+    vectors = {vector for vector, _ in campaign.CHAIN}
+    assert vectors == {"sqli", "xss", "cmdi", "idor", "ssrf"}
+    assert all(tactic.startswith("TA") for _, tactic in campaign.CHAIN)
