@@ -60,7 +60,9 @@ def state():
 
 @app.get("/report")
 def report():
-    return jsonify(report_mod.build(match.uptime()))
+    # No probes yet -> None, so the report awards no SLA points either (matches
+    # the same guard in match.state()).
+    return jsonify(report_mod.build(match.uptime() if match.sla_total else None))
 
 
 @app.post("/round/start")
