@@ -32,7 +32,7 @@ keeps this project legal and ethical to use.
 - Not a scanner, proxy, or framework for testing third-party systems.
 - Not hardened. The dashboard and target skip production controls (CSRF,
   auth on the dashboard, subresource integrity on CDN scripts) on purpose, to
-  keep the teaching surface small. Do not copy these services into production.
+  keep the lab small and easy to follow. Do not copy these services into production.
 
 ## Reporting
 
