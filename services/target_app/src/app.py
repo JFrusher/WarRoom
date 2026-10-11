@@ -318,7 +318,7 @@ def render_preview():
 # The HS256 secret is deployment-provided; absent that, it is random per
 # process so a source-reader cannot forge a signed admin token. The teaching
 # vuln is alg=none (which needs no secret), not a leaked signing key.
-_JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32)).encode()
+_JWT_SECRET = (os.getenv("JWT_SECRET") or secrets.token_hex(32)).encode()
 
 
 def _b64url(raw: bytes) -> str:
