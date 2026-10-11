@@ -11,19 +11,26 @@ the shared mitigation file. Nothing here reaches outside the container.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import html
 import json
 import logging
+import os
 import re
+import secrets
 import subprocess
 import threading
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
-from flask import Flask, Response, g, jsonify, render_template, request
+import requests
+from flask import Flask, Response, g, jsonify, render_template, render_template_string, request
 
 from config import settings
-from src import db, events, flags, state
+from src import db, events, flags, scenario, state
 from src.errors import DiagnosticsError, FlagUnavailableError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
@@ -31,15 +38,13 @@ log = logging.getLogger("target.app")
 
 app = Flask(__name__, template_folder="../templates")
 
-# Vectors already credited to the red team for the live flag. Reset on every
-# rotation so each flag is worth one capture per attack class.
-_awarded: set[str] = set()
-_awarded_lock = threading.Lock()
-_awarded_flag: str | None = None
-
 _HOST_RE = re.compile(r"^[A-Za-z0-9.\-]{1,253}$")
 _XSS_STEAL_MARKER = "warzone-steal"
-_VALID_VECTORS = {"sqli", "xss", "cmdi"}
+
+# Opaque server-side sessions: random token -> user id. The IDOR patch
+# resolves a caller's X-Session through this map instead of trusting a
+# guessable "sess-<id>" string.
+_sessions: dict[str, int] = {}
 
 
 # --------------------------------------------------------------------------- #
@@ -48,9 +53,13 @@ _VALID_VECTORS = {"sqli", "xss", "cmdi"}
 @app.before_request
 def _enforce_blocklist():
     g.request_body = request.get_data(as_text=True)
-    if request.remote_addr in state.blocked_ips():
+    ip = request.remote_addr
+    if ip in state.blocked_ips():
         _log_request(status=429)
         return jsonify(error="rate limited"), 429
+    if ip in state.throttled_ips():
+        # Blue's intermediate tier: slowed, not blocked, so the SLA holds.
+        time.sleep(settings.THROTTLE_DELAY_SECONDS)
     return None
 
 
@@ -135,7 +144,9 @@ def login():
     if row is None:
         return jsonify(error="invalid credentials"), 401
 
-    body = {"username": row["username"], "role": row["role"], "token": f"sess-{row['id']}"}
+    token = secrets.token_hex(16)
+    _sessions[token] = row["id"]
+    body = {"username": row["username"], "role": row["role"], "token": token}
     if row["role"] == "admin":
         # Admin console leaks the live flag to whoever reaches it.
         try:
@@ -208,43 +219,167 @@ def _run_ping(host: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Flag submission & red-team scoring
+# D) Insecure direct object reference (broken object-level authorization)
 # --------------------------------------------------------------------------- #
-@app.post("/api/v1/flags/submit")
-def submit_flag():
+@app.get("/api/v1/users/<int:uid>/profile")
+def user_profile(uid: int):
+    if not scenario.enabled("idor"):
+        return jsonify(error="not found"), 404
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT id, username, role FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+    if row is None:
+        return jsonify(error="no such user"), 404
+    if state.is_patched("idor") and _sessions.get(request.headers.get("X-Session", "")) != uid:
+        # Safe path: resolve the opaque session to its owner and allow only
+        # that user to read their own profile. A forged header has no mapping.
+        return jsonify(error="forbidden"), 403
+
+    profile = {"id": row["id"], "username": row["username"], "role": row["role"]}
+    if row["role"] == "admin":
+        # The admin's profile carries the flag; without the authz check any
+        # caller can read it by walking ids.
+        try:
+            profile["flag"] = flags.current()
+        except FlagUnavailableError:
+            pass
+    return jsonify(profile)
+
+
+# --------------------------------------------------------------------------- #
+# E) Server-side request forgery
+# --------------------------------------------------------------------------- #
+@app.post("/api/v1/fetch")
+def fetch_url():
+    if not scenario.enabled("ssrf"):
+        return jsonify(error="not found"), 404
     data = request.get_json(silent=True) or {}
-    token = str(data.get("flag", "")).strip()
-    vector = str(data.get("vector", "unknown"))
+    url = str(data.get("url", ""))
 
-    # One capture credit per real attack class; reject arbitrary vector names
-    # so a single flag cannot be resubmitted for unlimited points.
-    if vector not in _VALID_VECTORS:
-        return jsonify(status="rejected", reason="unknown vector"), 400
-
+    if state.is_patched("ssrf"):
+        host = (urlparse(url).hostname or "").lower()
+        if host in settings.SSRF_BLOCKED_HOSTS or host.startswith(("10.", "192.168.", "172.")):
+            return jsonify(error="blocked host"), 400
     try:
-        live = flags.current()
+        resp = requests.get(url, timeout=3)
+    except requests.RequestException as exc:
+        return jsonify(error=str(exc)), 502
+    return jsonify(url=url, status=resp.status_code, body=resp.text[:2000])
+
+
+# --------------------------------------------------------------------------- #
+# Honeytoken: a decoy no legitimate client should ever request
+# --------------------------------------------------------------------------- #
+_DECOY_FLAG = "WARZONE{decoy-do-not-submit}"
+
+
+@app.get("/admin/backup.sql")
+def honeytoken():
+    # No real user has a reason to hit this, so any access is a high-fidelity
+    # signal for the blue team. The token here is a decoy the referee rejects.
+    return Response(
+        f"-- database backup\nINSERT INTO flags VALUES ('{_DECOY_FLAG}');\n",
+        mimetype="application/sql",
+    )
+
+
+def _safe_flag() -> str:
+    try:
+        return flags.current()
     except FlagUnavailableError:
-        return jsonify(error="no active flag"), 503
-
-    if token != live:
-        return jsonify(status="rejected", reason="stale or incorrect flag"), 400
-
-    with _awarded_lock:
-        _sync_awarded(live)
-        if vector in _awarded:
-            return jsonify(status="duplicate", vector=vector), 200
-        _awarded.add(vector)
-
-    events.publish("flag_captured", {"team": "red", "vector": vector, "points": 100})
-    return jsonify(status="accepted", vector=vector, points=100), 200
+        return ""
 
 
-def _sync_awarded(live: str) -> None:
-    """Clear the credited-vector set when the flag has rotated."""
-    global _awarded_flag
-    if _awarded_flag != live:
-        _awarded.clear()
-        _awarded_flag = live
+# --------------------------------------------------------------------------- #
+# F) Server-side template injection
+# --------------------------------------------------------------------------- #
+@app.post("/api/v1/render")
+def render_preview():
+    if not scenario.enabled("ssti"):
+        return jsonify(error="not found"), 404
+    data = request.get_json(silent=True) or {}
+    template = str(data.get("template", ""))
+    if state.is_patched("ssti"):
+        # Safe path: treat input as data, never evaluate it as a template.
+        return jsonify(rendered=html.escape(template))
+    # Intentionally vulnerable: user input rendered as a Jinja template, which
+    # exposes the app config (where the flag lives) via {{ config['FLAG'] }}.
+    app.config["FLAG"] = _safe_flag()
+    try:
+        return jsonify(rendered=render_template_string(template))
+    except Exception as exc:  # surface template errors to the attacker
+        return jsonify(error=str(exc)), 400
+
+
+# --------------------------------------------------------------------------- #
+# G) JWT "alg: none" authentication bypass
+# --------------------------------------------------------------------------- #
+# The HS256 secret is deployment-provided; absent that, it is random per
+# process so a source-reader cannot forge a signed admin token. The teaching
+# vuln is alg=none (which needs no secret), not a leaked signing key.
+_JWT_SECRET = (os.getenv("JWT_SECRET") or secrets.token_hex(32)).encode()
+
+
+def _b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _b64url_decode(segment: str) -> bytes:
+    return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
+
+
+def _issue_jwt(username: str) -> str:
+    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    payload = _b64url(json.dumps({"username": username}).encode())
+    signing_input = f"{header}.{payload}"
+    sig = _b64url(hmac.new(_JWT_SECRET, signing_input.encode(), hashlib.sha256).digest())
+    return f"{signing_input}.{sig}"
+
+
+def _verify_jwt(token: str) -> dict | None:
+    try:
+        header_b64, payload_b64, sig = token.split(".")
+        header = json.loads(_b64url_decode(header_b64))
+        payload = json.loads(_b64url_decode(payload_b64))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if header.get("alg") == "none":
+        # Intentionally vulnerable: an unsigned token is trusted. The patch
+        # rejects alg=none and requires a verified HS256 signature.
+        return None if state.is_patched("jwt") else payload
+    expected = _b64url(
+        hmac.new(_JWT_SECRET, f"{header_b64}.{payload_b64}".encode(), hashlib.sha256).digest()
+    )
+    return payload if hmac.compare_digest(expected, sig) else None
+
+
+@app.post("/api/v1/token")
+def issue_token():
+    if not scenario.enabled("jwt"):
+        return jsonify(error="not found"), 404
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username", "alice"))
+    if username == "admin":
+        # The token endpoint never mints admin tokens from caller input; the
+        # only route to admin is the alg=none forgery, which the patch blocks.
+        return jsonify(error="cannot issue an admin token"), 403
+    return jsonify(token=_issue_jwt(username))
+
+
+@app.post("/api/v1/account")
+def account():
+    if not scenario.enabled("jwt"):
+        return jsonify(error="not found"), 404
+    data = request.get_json(silent=True) or {}
+    token = str(data.get("token", "")) or request.headers.get("Authorization", "").removeprefix("Bearer ")
+    claims = _verify_jwt(token)
+    if not claims:
+        return jsonify(error="invalid token"), 401
+    body = {"username": claims.get("username")}
+    if claims.get("username") == "admin":
+        body["flag"] = _safe_flag()
+    return jsonify(body)
 
 
 # --------------------------------------------------------------------------- #
@@ -281,8 +416,8 @@ def _admin_xss_bot() -> None:
 
 def _bootstrap() -> None:
     db.init_schema()
-    flags.rotate()
-    flags.start_rotation()
+    flags.sync()
+    flags.start_sync()
     threading.Thread(target=_admin_xss_bot, name="admin-xss-bot", daemon=True).start()
 
 

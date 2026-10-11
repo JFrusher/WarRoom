@@ -9,8 +9,11 @@ APP_LOG = Path(os.getenv("APP_LOG", "/var/log/app.log"))
 STATE_DIR = Path(os.getenv("STATE_DIR", "/var/lib/warzone"))
 MITIGATIONS_FILE = STATE_DIR / "mitigations.json"
 BLOCKLIST_FILE = STATE_DIR / "blocklist.json"
+THROTTLE_FILE = STATE_DIR / "throttle.json"
 
-DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://dashboard:8080")
+# Detections go to the referee, which scores them and forwards to the
+# dashboard. The referee is the single scoreboard authority.
+REFEREE_URL = os.getenv("REFEREE_URL", "http://referee:9000")
 
 # Seconds between polls when the log file has no new lines.
 TAIL_IDLE_SLEEP = float(os.getenv("TAIL_IDLE_SLEEP", "0.5"))

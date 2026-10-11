@@ -9,13 +9,13 @@ import argparse
 import logging
 import sys
 
-from src import client, recon, report, submit
+from src import campaign, client, profiles, recon, report, submit
 from src.errors import ExploitFailed, RedTeamError
-from src.exploits import cmdi, sqli, xss
+from src.exploits import cmdi, idor, jwt, sqli, ssrf, ssti, xss
 
 log = logging.getLogger("red.cli")
 
-_EXPLOITS = {mod.VECTOR: mod for mod in (sqli, xss, cmdi)}
+_EXPLOITS = {mod.VECTOR: mod for mod in (sqli, xss, cmdi, idor, ssrf, ssti, jwt)}
 
 
 def _run_exploit(sess, vector: str) -> bool:
@@ -58,20 +58,42 @@ def cmd_full_auto(sess) -> int:
     return 0 if scored else 2
 
 
+def cmd_campaign(sess) -> int:
+    print(f"campaign: target={client.settings.TARGET_URL} profile={profiles.ACTIVE.name}")
+    recon.run(sess)
+    covered: list[str] = []
+    for vector, tactic in campaign.CHAIN:
+        report.emit("campaign_stage", {"vector": vector, "tactic": tactic})
+        print(f"[{tactic}] {vector}")
+        if _run_exploit(sess, vector):
+            covered.append(tactic)
+        profiles.pace()
+    print(f"\ntactics covered: {', '.join(covered) or 'none'}")
+    return 0 if covered else 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="red", description="War Zone red-team agent")
+    parser.add_argument("--profile", choices=["loud", "stealth"], default="loud",
+                        help="attack profile: loud (default) or stealth")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("recon", help="fingerprint the target")
     sub.add_parser("sqli", help="run the SQL injection exploit")
     sub.add_parser("xss", help="run the stored XSS exploit")
     sub.add_parser("cmdi", help="run the command injection exploit")
+    sub.add_parser("idor", help="run the IDOR exploit")
+    sub.add_parser("ssrf", help="run the SSRF exploit")
+    sub.add_parser("ssti", help="run the SSTI exploit")
+    sub.add_parser("jwt", help="run the JWT alg=none exploit")
     sub.add_parser("full-auto", help="recon, exploit every vector, and submit")
+    sub.add_parser("campaign", help="run the kill-chain in ATT&CK order")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(name)s %(message)s")
     args = build_parser().parse_args(argv)
+    profiles.use(args.profile)
     sess = client.session()
 
     try:
@@ -79,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_recon(sess)
         if args.command == "full-auto":
             return cmd_full_auto(sess)
+        if args.command == "campaign":
+            return cmd_campaign(sess)
         return cmd_single(sess, args.command)
     except RedTeamError as exc:
         log.error("%s", exc)

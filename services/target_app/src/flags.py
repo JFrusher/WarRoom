@@ -1,16 +1,15 @@
-"""Flag generation and rotation.
+"""Flag mirroring.
 
-A single live flag is stored in two places on purpose, one per attack class:
-
-* the ``flags`` table  -> reachable through SQL injection
-* ``flag_current.txt`` -> reachable through arbitrary file read
-
-The stored-XSS path leaks its own flag at runtime (see :mod:`src.app`).
+The referee is authoritative for the flag; it publishes the live value to the
+shared state volume. The target mirrors that value into two places it can leak
+from: the ``flags`` table (reachable via SQL injection) and
+``flag_current.txt`` (reachable via arbitrary file read). The stored-XSS path
+leaks it at runtime via the admin bot.
 """
 from __future__ import annotations
 
+import json
 import logging
-import secrets
 import threading
 
 from config import settings
@@ -20,37 +19,32 @@ from src.errors import FlagUnavailableError
 log = logging.getLogger("target.flags")
 
 
-def mint() -> str:
-    """Return a fresh, unguessable flag token."""
-    return f"WARZONE{{{secrets.token_hex(12)}}}"
+def current() -> str:
+    """Return the live flag the referee has published, or raise."""
+    try:
+        return json.loads(settings.SHARED_FLAG_FILE.read_text())["token"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as exc:
+        raise FlagUnavailableError("referee has not published a flag yet") from exc
 
 
-def rotate() -> str:
-    """Generate a new flag and persist it to the DB and the flag file."""
-    token = mint()
+def sync() -> None:
+    """Mirror the published flag into the DB and flag file so it leaks."""
+    try:
+        token = current()
+    except FlagUnavailableError:
+        return
     db.set_flag(token)
     settings.FLAG_DIR.mkdir(parents=True, exist_ok=True)
     settings.FLAG_FILE.write_text(token + "\n")
-    log.info("flag rotated")
-    return token
 
 
-def current() -> str:
-    """Return the live flag, raising if storage has not been initialised."""
-    token = db.get_flag()
-    if not token:
-        raise FlagUnavailableError("no flag has been minted yet")
-    return token
-
-
-def start_rotation() -> threading.Thread:
-    """Spawn a daemon thread that rotates the flag on a fixed interval."""
-    stop = threading.Event()
-
+def start_sync() -> threading.Thread:
+    """Spawn a daemon thread that keeps the mirror current as the flag rotates."""
     def _loop() -> None:
-        while not stop.wait(settings.FLAG_ROTATE_SECONDS):
-            rotate()
+        while True:
+            sync()
+            threading.Event().wait(settings.FLAG_SYNC_SECONDS)
 
-    thread = threading.Thread(target=_loop, name="flag-rotator", daemon=True)
+    thread = threading.Thread(target=_loop, name="flag-sync", daemon=True)
     thread.start()
     return thread

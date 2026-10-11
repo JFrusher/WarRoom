@@ -1,4 +1,4 @@
-"""Best-effort defence telemetry for the dashboard."""
+"""Best-effort defence telemetry for the referee (which scores and forwards)."""
 from __future__ import annotations
 
 import logging
@@ -13,9 +13,9 @@ log = logging.getLogger("blue.report")
 def emit(kind: str, payload: dict) -> None:
     try:
         requests.post(
-            f"{settings.DASHBOARD_URL}/ingest",
+            f"{settings.REFEREE_URL}/ingest",
             json={"kind": kind, "team": "blue", **payload},
             timeout=2.0,
         )
     except requests.RequestException as exc:
-        log.debug("dashboard report failed: %s", exc)
+        log.debug("referee report failed: %s", exc)

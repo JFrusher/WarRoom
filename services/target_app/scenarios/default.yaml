@@ -1,0 +1,12 @@
+# A scenario selects which vulnerabilities are present in a match and how hard
+# they are. Swap SCENARIO_FILE to run a focused round (e.g. only SSRF).
+name: default
+difficulty: easy
+enabled:
+  - sqli
+  - xss
+  - cmdi
+  - idor
+  - ssrf
+  - ssti
+  - jwt

@@ -15,6 +15,7 @@ COPY config ./config
 COPY src ./src
 COPY templates ./templates
 COPY scripts ./scripts
+COPY scenarios ./scenarios
 
 EXPOSE 5000
 

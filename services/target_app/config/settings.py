@@ -26,12 +26,28 @@ APP_LOG = Path(os.getenv("APP_LOG", "/var/log/app.log"))
 STATE_DIR = Path(os.getenv("STATE_DIR", "/var/lib/warzone"))
 MITIGATIONS_FILE = STATE_DIR / "mitigations.json"
 BLOCKLIST_FILE = STATE_DIR / "blocklist.json"
+THROTTLE_FILE = STATE_DIR / "throttle.json"
+
+# Added latency for a throttled IP (blue's intermediate response tier).
+THROTTLE_DELAY_SECONDS = float(os.getenv("THROTTLE_DELAY_SECONDS", "0.3"))
+
+# The referee owns the flag and publishes it here; the target mirrors it into
+# its DB and flag file so the vulnerabilities leak the live value.
+SHARED_FLAG_FILE = STATE_DIR / "flag.json"
+FLAG_SYNC_SECONDS = float(os.getenv("FLAG_SYNC_SECONDS", "2.0"))
 
 # Dashboard event sink. The target posts attack/score events here.
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://dashboard:8080")
 
-# How often the flag rotates, in seconds.
-FLAG_ROTATE_SECONDS = int(os.getenv("FLAG_ROTATE_SECONDS", "180"))
-
 LISTEN_HOST = os.getenv("LISTEN_HOST", "0.0.0.0")
 LISTEN_PORT = int(os.getenv("LISTEN_PORT", "5000"))
+
+# Which scenario (set of enabled vulnerabilities) this instance runs.
+SCENARIO = os.getenv("SCENARIO", "default")
+SCENARIO_FILE = Path(
+    os.getenv("SCENARIO_FILE",
+              str(Path(__file__).resolve().parents[1] / "scenarios" / f"{SCENARIO}.yaml"))
+)
+
+# Hosts the SSRF-patched fetch endpoint refuses (internal / link-local).
+SSRF_BLOCKED_HOSTS = ("metadata", "localhost", "127.0.0.1", "169.254.169.254", "0.0.0.0")

@@ -17,6 +17,13 @@ _ALLOWED_HOSTS = {
     "localhost:5000",
 }
 
+# The referee adjudicates captures; it is also confined to the lab.
+_ALLOWED_REFEREES = {
+    "referee:9000",
+    "127.0.0.1:9000",
+    "localhost:9000",
+}
+
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://dashboard:8080")
 
 HTTP_TIMEOUT = 5.0
@@ -35,4 +42,17 @@ def resolve_target() -> str:
     return url
 
 
+def resolve_referee() -> str:
+    """Return the validated referee base URL or raise if it is off-range."""
+    url = os.getenv("REFEREE_URL", "http://referee:9000").rstrip("/")
+    authority = urlparse(url).netloc
+    if authority not in _ALLOWED_REFEREES:
+        raise ValueError(
+            f"refusing to use referee {authority!r}; this agent is confined to "
+            f"the local lab ({', '.join(sorted(_ALLOWED_REFEREES))})"
+        )
+    return url
+
+
 TARGET_URL = resolve_target()
+REFEREE_URL = resolve_referee()

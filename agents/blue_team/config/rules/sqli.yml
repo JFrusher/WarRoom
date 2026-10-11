@@ -1,0 +1,13 @@
+# Detection-as-code rule (Sigma-inspired). One rule per attack vector.
+id: sqli-injection
+title: SQL injection — tautology, union, or comment terminator
+vector: sqli
+severity: high
+mitre: T1190            # Exploit Public-Facing Application
+patterns:
+  - "'\\s*or\\s*'?\\d"
+  - "union\\s+select"
+  - "'\\s*--"
+test:
+  match: "{\"username\": \"admin' -- \"}"
+  no_match: "admin'/**/--/**/"   # obfuscated: deliberately slips the signature

@@ -1,0 +1,21 @@
+# Scoring rubric for a match. Tunable without touching code.
+#
+# Red is rewarded for capturing flags quickly and without being detected first.
+# Blue is rewarded for detecting and mitigating quickly, and for keeping the
+# service available, and is penalised for blocking benign traffic.
+
+red:
+  base: 100              # points for any valid capture
+  speed_bonus_max: 50    # full bonus for an instant capture, decaying to 0
+  speed_bonus_window: 120  # seconds over which the speed bonus decays to 0
+  stealth_bonus: 25      # awarded if the vector was not detected before capture
+
+blue:
+  detect_base: 60        # full points for an instant detection, decaying
+  detect_window: 120
+  mitigate_base: 80      # full points for an instant mitigation, decaying
+  mitigate_window: 180
+  sla_weight: 100        # multiplied by uptime fraction (0..1)
+  false_positive_penalty: 40  # per benign request blocked
+
+valid_vectors: [sqli, xss, cmdi, idor, ssrf, ssti, jwt]

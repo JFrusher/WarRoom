@@ -7,6 +7,37 @@ name: warzone
 # dashboard (8080), both bound to loopback so nothing is exposed off-box.
 
 services:
+  # Neutral authority: owns the flag, validates captures, scores both sides,
+  # probes the SLA, and forwards a live feed to the dashboard.
+  referee:
+    build: ./services/referee
+    image: warzone/referee
+    container_name: warzone_referee
+    environment:
+      DASHBOARD_URL: http://dashboard:8080
+      TARGET_URL: http://target_app:5000
+      FLAG_ROTATE_SECONDS: "180"
+    volumes:
+      - logs:/var/log
+      - state:/var/lib/warzone
+    networks:
+      - warzone
+
+  # Internal-only metadata service: the SSRF prize. No published ports, so it
+  # is reachable only from inside the lab network — SSRF is the only way in.
+  metadata:
+    build: ./services/metadata
+    image: warzone/metadata
+    container_name: warzone_metadata
+    environment:
+      STATE_DIR: /var/lib/warzone
+    volumes:
+      - state:/var/lib/warzone:ro
+    networks:
+      # backend only: the red agent is not on this network, so the metadata
+      # flag is reachable only by coercing the target to fetch it (SSRF).
+      - backend
+
   target_app:
     build: ./services/target_app
     image: warzone/target_app
@@ -15,17 +46,21 @@ services:
       - "127.0.0.1:5000:5000"
     environment:
       DASHBOARD_URL: http://dashboard:8080
-      FLAG_ROTATE_SECONDS: "180"
     volumes:
       - logs:/var/log
       - state:/var/lib/warzone
+    depends_on:
+      referee:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/healthz',timeout=2).status==200 else 1)"]
       interval: 5s
       timeout: 3s
       retries: 5
     networks:
+      # warzone: reachable by red/referee/dashboard. backend: reach metadata.
       - warzone
+      - backend
 
   blue_team:
     build: ./agents/blue_team
@@ -33,7 +68,7 @@ services:
     container_name: warzone_blue
     environment:
       TARGET_URL: http://target_app:5000
-      DASHBOARD_URL: http://dashboard:8080
+      REFEREE_URL: http://referee:9000
       APP_LOG: /var/log/app.log
     volumes:
       - logs:/var/log
@@ -66,6 +101,7 @@ services:
     container_name: warzone_red
     environment:
       TARGET_URL: http://target_app:5000
+      REFEREE_URL: http://referee:9000
       DASHBOARD_URL: http://dashboard:8080
     depends_on:
       target_app:
@@ -80,5 +116,15 @@ volumes:
   state:
 
 networks:
+  # internal: true removes the network's gateway, so no container can reach
+  # off-host. The command-injection path therefore cannot exfiltrate or call
+  # out, which is the confinement the lab claims (CWE-923). Intra-network
+  # traffic and the loopback-published UI/dashboard ports are unaffected;
+  # image builds use the separate build network, so pip/apt still work.
   warzone:
     driver: bridge
+    internal: true
+  # Target <-> metadata only; red_team is deliberately kept off this network.
+  backend:
+    driver: bridge
+    internal: true

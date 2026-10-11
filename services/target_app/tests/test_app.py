@@ -1,8 +1,21 @@
 """End-to-end checks for the three intentional bugs and their patches."""
 from __future__ import annotations
 
+import base64
+import json
+
 from config import settings
+from src import app as app_module
 from src import flags
+
+
+def _jwt_none_admin() -> str:
+    def seg(obj: dict) -> str:
+        return base64.urlsafe_b64encode(
+            json.dumps(obj, separators=(",", ":")).encode()
+        ).rstrip(b"=").decode()
+
+    return f"{seg({'alg': 'none', 'typ': 'JWT'})}.{seg({'username': 'admin'})}."
 
 
 def test_sqli_auth_bypass_leaks_admin_flag(client):
@@ -76,25 +89,93 @@ def test_cmdi_patch_rejects_metacharacters(client, set_mitigation):
     assert resp.status_code == 400
 
 
-def test_flag_submission_scores_once_per_vector(client):
+def test_idor_leaks_admin_profile_flag(client):
+    resp = client.get("/api/v1/users/1/profile")
+    assert resp.status_code == 200
+    assert resp.get_json()["flag"] == flags.current()
+
+
+def test_idor_patch_requires_matching_session(client, set_mitigation):
+    set_mitigation(idor=True)
+    assert client.get("/api/v1/users/1/profile").status_code == 403
+
+
+def test_idor_patch_rejects_forged_session(client, set_mitigation):
+    set_mitigation(idor=True)
+    resp = client.get("/api/v1/users/1/profile", headers={"X-Session": "sess-1"})
+    assert resp.status_code == 403
+
+
+def test_idor_patch_allows_own_profile_with_real_session(client, set_mitigation):
+    set_mitigation(idor=True)
+    token = client.post(
+        "/api/v1/auth/login", json={"username": "alice", "password": "password123"}
+    ).get_json()["token"]
+    # alice is user id 2; her session reads her own profile but not admin's.
+    assert client.get("/api/v1/users/2/profile", headers={"X-Session": token}).status_code == 200
+    assert client.get("/api/v1/users/1/profile", headers={"X-Session": token}).status_code == 403
+
+
+class _StubResponse:
+    status_code = 200
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+def test_ssrf_fetches_internal_metadata(client, monkeypatch):
     flag = flags.current()
-    first = client.post("/api/v1/flags/submit", json={"flag": flag, "vector": "sqli"})
-    assert first.get_json()["status"] == "accepted"
-    dup = client.post("/api/v1/flags/submit", json={"flag": flag, "vector": "sqli"})
-    assert dup.get_json()["status"] == "duplicate"
-
-
-def test_flag_submission_rejects_wrong_flag(client):
-    resp = client.post(
-        "/api/v1/flags/submit", json={"flag": "WARZONE{nope}", "vector": "sqli"}
+    monkeypatch.setattr(
+        app_module.requests, "get",
+        lambda url, timeout=0: _StubResponse(f'{{"flag": "{flag}"}}'),
     )
+    resp = client.post("/api/v1/fetch", json={"url": "http://metadata/"})
+    assert flag in resp.get_json()["body"]
+
+
+def test_ssrf_patch_blocks_internal_host(client, set_mitigation):
+    set_mitigation(ssrf=True)
+    resp = client.post("/api/v1/fetch", json={"url": "http://metadata/"})
     assert resp.status_code == 400
 
 
-def test_flag_submission_rejects_unknown_vector(client):
-    flag = flags.current()
-    resp = client.post(
-        "/api/v1/flags/submit", json={"flag": flag, "vector": "made-up"}
-    )
-    assert resp.status_code == 400
-    assert resp.get_json()["reason"] == "unknown vector"
+def test_ssti_evaluates_and_leaks_config_flag(client):
+    resp = client.post("/api/v1/render", json={"template": "{{ config['FLAG'] }}"})
+    assert resp.status_code == 200
+    assert flags.current() in resp.get_json()["rendered"]
+
+
+def test_ssti_patch_returns_literal(client, set_mitigation):
+    set_mitigation(ssti=True)
+    resp = client.post("/api/v1/render", json={"template": "{{ config['FLAG'] }}"})
+    assert flags.current() not in resp.get_json()["rendered"]
+
+
+def test_jwt_alg_none_forges_admin(client):
+    resp = client.post("/api/v1/account", json={"token": _jwt_none_admin()})
+    assert resp.status_code == 200
+    assert resp.get_json()["flag"] == flags.current()
+
+
+def test_jwt_patch_rejects_alg_none(client, set_mitigation):
+    set_mitigation(jwt=True)
+    resp = client.post("/api/v1/account", json={"token": _jwt_none_admin()})
+    assert resp.status_code == 401
+
+
+def test_token_endpoint_refuses_to_issue_admin(client):
+    assert client.post("/api/v1/token", json={"username": "admin"}).status_code == 403
+
+
+def test_honeytoken_serves_decoy_not_the_real_flag(client):
+    resp = client.get("/admin/backup.sql")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "decoy" in body
+    assert flags.current() not in body
+
+
+def test_target_mirrors_the_referee_flag(client):
+    # The target leaks whatever the referee published; it no longer scores.
+    assert flags.current() == "WARZONE{deadbeefdeadbeefdeadbeef}"
+    assert client.post("/api/v1/flags/submit", json={}).status_code == 404

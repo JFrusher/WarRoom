@@ -15,13 +15,19 @@ os.environ.update(
     FLAG_DIR=str(_TMP / "flags"),
     APP_LOG=str(_TMP / "app.log"),
     STATE_DIR=str(_TMP / "state"),
-    FLAG_ROTATE_SECONDS="3600",
     DASHBOARD_URL="http://localhost:9",  # unreachable: publishes no-op in tests
 )
 
 import json  # noqa: E402
 
 import pytest  # noqa: E402
+
+# Stand in for the referee: publish a flag to the shared state volume before
+# the app imports, so the target can mirror and leak it.
+(_TMP / "state").mkdir(parents=True, exist_ok=True)
+(_TMP / "state" / "flag.json").write_text(
+    json.dumps({"round": "test", "token": "WARZONE{deadbeefdeadbeefdeadbeef}"})
+)
 
 from config import settings  # noqa: E402
 from src import app as app_module  # noqa: E402

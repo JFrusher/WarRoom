@@ -1,0 +1,12 @@
+id: xss-stored
+title: Cross-site scripting — script tag or event-handler injection
+vector: xss
+severity: medium
+mitre: T1059.007        # Command and Scripting Interpreter: JavaScript
+patterns:
+  - "<script"
+  - "onerror\\s*="
+  - "javascript:"
+test:
+  match: "<script>warzone-steal</script>"
+  no_match: "a perfectly ordinary comment"

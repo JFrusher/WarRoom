@@ -1,0 +1,14 @@
+id: ssti-jinja
+title: Server-side template injection (Jinja expression)
+vector: ssti
+severity: high
+mitre: T1190            # Exploit Public-Facing Application
+path: /api/v1/render
+patterns:
+  - "\\{\\{.*\\}\\}"
+  - "config"
+  - "self\\.__"
+test:
+  path: /api/v1/render
+  match: "{\"template\": \"{{ config['FLAG'] }}\"}"
+  no_match: "{\"template\": \"hello world\"}"
