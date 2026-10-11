@@ -89,3 +89,12 @@ def test_flag_submission_rejects_wrong_flag(client):
         "/api/v1/flags/submit", json={"flag": "WARZONE{nope}", "vector": "sqli"}
     )
     assert resp.status_code == 400
+
+
+def test_flag_submission_rejects_unknown_vector(client):
+    flag = flags.current()
+    resp = client.post(
+        "/api/v1/flags/submit", json={"flag": flag, "vector": "made-up"}
+    )
+    assert resp.status_code == 400
+    assert resp.get_json()["reason"] == "unknown vector"

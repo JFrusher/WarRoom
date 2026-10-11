@@ -39,6 +39,7 @@ _awarded_flag: str | None = None
 
 _HOST_RE = re.compile(r"^[A-Za-z0-9.\-]{1,253}$")
 _XSS_STEAL_MARKER = "warzone-steal"
+_VALID_VECTORS = {"sqli", "xss", "cmdi"}
 
 
 # --------------------------------------------------------------------------- #
@@ -160,8 +161,9 @@ def post_comment():
     if not body:
         return jsonify(error="comment body is required"), 400
 
-    stored = body if not state.is_patched("xss") else html.escape(body)
-    db.add_comment(author=author, body=stored)
+    # Always store the raw body; index() escapes at render time when the XSS
+    # patch is on, which also protects comments stored before it was enabled.
+    db.add_comment(author=author, body=body)
     return jsonify(status="stored"), 201
 
 
@@ -213,6 +215,11 @@ def submit_flag():
     data = request.get_json(silent=True) or {}
     token = str(data.get("flag", "")).strip()
     vector = str(data.get("vector", "unknown"))
+
+    # One capture credit per real attack class; reject arbitrary vector names
+    # so a single flag cannot be resubmitted for unlimited points.
+    if vector not in _VALID_VECTORS:
+        return jsonify(status="rejected", reason="unknown vector"), 400
 
     try:
         live = flags.current()

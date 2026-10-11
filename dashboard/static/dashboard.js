@@ -87,6 +87,10 @@ socket.on("snapshot", (snap) => {
   renderScores(snap.scores);
   renderMitigations(snap.mitigations);
   el("uptime").textContent = `${snap.uptime}%`;
+  // A reconnect re-sends the whole snapshot; reset first so we replace the
+  // rendered history instead of duplicating it and double-counting vectors.
+  el("feed").innerHTML = "";
+  for (const v of Object.keys(vectorCounts)) vectorCounts[v] = 0;
   snap.events.forEach(pushEvent);
 });
 

@@ -6,6 +6,8 @@ fix or a block with no restart and no dropped connections.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 
 from config import settings
 
@@ -17,6 +19,20 @@ def _read(path, default):
         return default
 
 
+def _atomic_write(path, payload: str) -> None:
+    """Write via a temp file and os.replace so the target never reads a
+    half-written file (which would momentarily drop a mitigation or the
+    blocklist)."""
+    fd, tmp = tempfile.mkstemp(dir=str(settings.STATE_DIR), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(payload)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
 def enable_mitigation(vector: str) -> bool:
     """Switch on the safe code path for ``vector``. Return True if newly set."""
     settings.STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -24,7 +40,7 @@ def enable_mitigation(vector: str) -> bool:
     if current.get(vector):
         return False
     current[vector] = True
-    settings.MITIGATIONS_FILE.write_text(json.dumps(current))
+    _atomic_write(settings.MITIGATIONS_FILE, json.dumps(current))
     return True
 
 
@@ -35,5 +51,5 @@ def block_ip(ip: str) -> bool:
     if ip in current:
         return False
     current.append(ip)
-    settings.BLOCKLIST_FILE.write_text(json.dumps(current))
+    _atomic_write(settings.BLOCKLIST_FILE, json.dumps(current))
     return True

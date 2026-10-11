@@ -47,20 +47,24 @@ def handle(entry: dict, table: ThreatTable) -> None:
 
     score = table.record(ip, len(hits))
     log.info("detected %s from %s (score=%d)", ",".join(hits), ip, score)
+
+    # Enforce first, report after: a slow or unresponsive dashboard must never
+    # delay hot-patching or blocking.
+    patched = [v for v in hits if state.enable_mitigation(v)]
+    for vector in patched:
+        log.info("hot-patched %s", vector)
+    blocked = table.should_block(ip) and state.block_ip(ip)
+    if blocked:
+        log.info("rate-limiting %s", ip)
+
     report.emit(
         "detection",
         {"ip": ip, "vectors": hits, "score": score, "points": rules.POINTS_DETECTION},
     )
-
-    for vector in hits:
-        if state.enable_mitigation(vector):
-            log.info("hot-patched %s", vector)
-            report.emit("mitigation", {"vector": vector, "points": rules.POINTS_MITIGATION})
-
-    if table.should_block(ip):
-        if state.block_ip(ip):
-            log.info("rate-limiting %s", ip)
-            report.emit("block", {"ip": ip, "points": rules.POINTS_BLOCK})
+    for vector in patched:
+        report.emit("mitigation", {"vector": vector, "points": rules.POINTS_MITIGATION})
+    if blocked:
+        report.emit("block", {"ip": ip, "points": rules.POINTS_BLOCK})
 
 
 def main() -> None:

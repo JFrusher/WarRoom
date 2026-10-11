@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import pytest
+import requests
 
 from config import settings
 from src import client, obfuscate
+from src.errors import ExploitFailed
+from src.exploits import sqli
 
 
 def test_resolve_target_accepts_lab_host(monkeypatch):
@@ -44,3 +47,14 @@ def test_xss_variant_recases_tag():
 def test_cmdi_variant_swaps_separator():
     out = obfuscate.cmdi_variant("127.0.0.1; cat /flags/flag_current.txt")
     assert "\n" in out and "; " not in out
+
+
+def test_capture_converts_transport_error_to_exploitfailed(monkeypatch):
+    sess = client.session()
+
+    def boom(*args, **kwargs):
+        raise requests.ConnectionError("target unreachable")
+
+    monkeypatch.setattr(sess, "post", boom)
+    with pytest.raises(ExploitFailed):
+        sqli.capture(sess)
