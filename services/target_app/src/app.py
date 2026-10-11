@@ -17,6 +17,7 @@ import hmac
 import html
 import json
 import logging
+import os
 import re
 import secrets
 import subprocess
@@ -314,7 +315,10 @@ def render_preview():
 # --------------------------------------------------------------------------- #
 # G) JWT "alg: none" authentication bypass
 # --------------------------------------------------------------------------- #
-_JWT_SECRET = b"warzone-signing-secret"
+# The HS256 secret is deployment-provided; absent that, it is random per
+# process so a source-reader cannot forge a signed admin token. The teaching
+# vuln is alg=none (which needs no secret), not a leaked signing key.
+_JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32)).encode()
 
 
 def _b64url(raw: bytes) -> str:

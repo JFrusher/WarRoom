@@ -120,8 +120,10 @@ class Match:
     def state(self) -> dict:
         with self._lock:
             # SLA is a live metric (not journalled); fold it into the blue
-            # total so availability counts, per the rubric's sla_weight.
-            blue = self.blue_score + scoring.sla_points(self.uptime())
+            # total so availability counts, per the rubric's sla_weight. With
+            # no probes yet (e.g. just after a restart) it contributes 0 rather
+            # than a full-uptime default, so no SLA points are awarded unearned.
+            blue = self.blue_score + (scoring.sla_points(self.uptime()) if self.sla_total else 0)
             return {
                 "round": self.round_id,
                 "scores": {"red": self.red_score, "blue": blue},
