@@ -76,25 +76,7 @@ def test_cmdi_patch_rejects_metacharacters(client, set_mitigation):
     assert resp.status_code == 400
 
 
-def test_flag_submission_scores_once_per_vector(client):
-    flag = flags.current()
-    first = client.post("/api/v1/flags/submit", json={"flag": flag, "vector": "sqli"})
-    assert first.get_json()["status"] == "accepted"
-    dup = client.post("/api/v1/flags/submit", json={"flag": flag, "vector": "sqli"})
-    assert dup.get_json()["status"] == "duplicate"
-
-
-def test_flag_submission_rejects_wrong_flag(client):
-    resp = client.post(
-        "/api/v1/flags/submit", json={"flag": "WARZONE{nope}", "vector": "sqli"}
-    )
-    assert resp.status_code == 400
-
-
-def test_flag_submission_rejects_unknown_vector(client):
-    flag = flags.current()
-    resp = client.post(
-        "/api/v1/flags/submit", json={"flag": flag, "vector": "made-up"}
-    )
-    assert resp.status_code == 400
-    assert resp.get_json()["reason"] == "unknown vector"
+def test_target_mirrors_the_referee_flag(client):
+    # The target leaks whatever the referee published; it no longer scores.
+    assert flags.current() == "WARZONE{deadbeefdeadbeefdeadbeef}"
+    assert client.post("/api/v1/flags/submit", json={}).status_code == 404

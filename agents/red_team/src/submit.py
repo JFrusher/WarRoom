@@ -6,17 +6,16 @@ import logging
 import requests
 
 from config import settings
-from src import client
 from src.errors import SubmissionError
 
 log = logging.getLogger("red.submit")
 
 
 def submit(sess: requests.Session, flag: str, vector: str) -> dict:
-    """Send a captured flag for scoring and return the verdict."""
+    """Send a captured flag to the referee for scoring and return the verdict."""
     try:
         resp = sess.post(
-            client.url("/api/v1/flags/submit"),
+            f"{settings.REFEREE_URL}/flags/submit",
             json={"flag": flag, "vector": vector},
             timeout=settings.HTTP_TIMEOUT,
         )

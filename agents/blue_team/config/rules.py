@@ -34,10 +34,5 @@ HIT_SCORE = 10
 # Once an IP crosses this score it is rate-limited (blocked).
 BLOCK_THRESHOLD = 25
 
-# Points awarded to the blue team for its actions, reported to the dashboard.
-POINTS_DETECTION = 20
-POINTS_MITIGATION = 50
-POINTS_BLOCK = 30
-
 # Infrastructure IPs that must never be blocked, to protect the SLA.
 WHITELIST = set(filter(None, os.getenv("WHITELIST", "").split(",")))

@@ -60,14 +60,11 @@ def handle(entry: dict, table: ThreatTable) -> None:
     if blocked:
         log.info("rate-limiting %s", ip)
 
-    report.emit(
-        "detection",
-        {"ip": ip, "vectors": hits, "score": score, "points": rules.POINTS_DETECTION},
-    )
+    report.emit("detection", {"ip": ip, "vectors": hits, "score": score})
     for vector in patched:
-        report.emit("mitigation", {"vector": vector, "points": rules.POINTS_MITIGATION})
+        report.emit("mitigation", {"vector": vector})
     if blocked:
-        report.emit("block", {"ip": ip, "points": rules.POINTS_BLOCK})
+        report.emit("block", {"ip": ip})
 
 
 def main() -> None:

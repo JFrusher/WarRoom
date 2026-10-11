@@ -31,15 +31,8 @@ log = logging.getLogger("target.app")
 
 app = Flask(__name__, template_folder="../templates")
 
-# Vectors already credited to the red team for the live flag. Reset on every
-# rotation so each flag is worth one capture per attack class.
-_awarded: set[str] = set()
-_awarded_lock = threading.Lock()
-_awarded_flag: str | None = None
-
 _HOST_RE = re.compile(r"^[A-Za-z0-9.\-]{1,253}$")
 _XSS_STEAL_MARKER = "warzone-steal"
-_VALID_VECTORS = {"sqli", "xss", "cmdi"}
 
 
 # --------------------------------------------------------------------------- #
@@ -208,46 +201,6 @@ def _run_ping(host: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Flag submission & red-team scoring
-# --------------------------------------------------------------------------- #
-@app.post("/api/v1/flags/submit")
-def submit_flag():
-    data = request.get_json(silent=True) or {}
-    token = str(data.get("flag", "")).strip()
-    vector = str(data.get("vector", "unknown"))
-
-    # One capture credit per real attack class; reject arbitrary vector names
-    # so a single flag cannot be resubmitted for unlimited points.
-    if vector not in _VALID_VECTORS:
-        return jsonify(status="rejected", reason="unknown vector"), 400
-
-    try:
-        live = flags.current()
-    except FlagUnavailableError:
-        return jsonify(error="no active flag"), 503
-
-    if token != live:
-        return jsonify(status="rejected", reason="stale or incorrect flag"), 400
-
-    with _awarded_lock:
-        _sync_awarded(live)
-        if vector in _awarded:
-            return jsonify(status="duplicate", vector=vector), 200
-        _awarded.add(vector)
-
-    events.publish("flag_captured", {"team": "red", "vector": vector, "points": 100})
-    return jsonify(status="accepted", vector=vector, points=100), 200
-
-
-def _sync_awarded(live: str) -> None:
-    """Clear the credited-vector set when the flag has rotated."""
-    global _awarded_flag
-    if _awarded_flag != live:
-        _awarded.clear()
-        _awarded_flag = live
-
-
-# --------------------------------------------------------------------------- #
 # Simulated admin browser: the stored-XSS flag leak
 # --------------------------------------------------------------------------- #
 def _admin_xss_bot() -> None:
@@ -281,8 +234,8 @@ def _admin_xss_bot() -> None:
 
 def _bootstrap() -> None:
     db.init_schema()
-    flags.rotate()
-    flags.start_rotation()
+    flags.sync()
+    flags.start_sync()
     threading.Thread(target=_admin_xss_bot, name="admin-xss-bot", daemon=True).start()
 
 

@@ -7,6 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 for suite in \
     "services/target_app" \
+    "services/referee" \
     "agents/red_team" \
     "agents/blue_team" \
     "dashboard"; do
