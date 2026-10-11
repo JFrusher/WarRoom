@@ -62,9 +62,14 @@ Each phase is independently mergeable and leaves the suite green.
 - Graduated response playbooks: observe → throttle → virtual-patch → block.
 
 ### Phase 6 — fill the matrix
-- Remaining vuln classes as scenarios: SSTI, JWT/`alg=none`, blind/time-based
-  SQLi, path traversal.
-- A living capability matrix (technique × detection × mitigation).
+- New vuln classes: SSTI (A03) and JWT `alg=none` (A07/A02), each with red
+  exploit, blue signature, and referee flag — chosen first because they add
+  genuinely new OWASP categories.
+- A living capability matrix (`docs/CAPABILITY_MATRIX.md`): technique ×
+  detection × mitigation.
+- Path traversal and blind/time-based SQLi are documented as the next
+  scenarios in the matrix; they overlap the existing file-read and injection
+  classes, so they add less new coverage per line and are deferred.
 
 ## Scoring model
 

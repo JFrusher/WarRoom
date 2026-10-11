@@ -1,0 +1,13 @@
+id: jwt-alg-none
+title: JWT alg=none authentication bypass
+vector: jwt
+severity: high
+mitre: T1550            # Use Alternate Authentication Material
+path: /api/v1/account
+patterns:
+  - "eyJhbGciOiJub25l"           # base64url of {"alg":"none"...
+  - "\"alg\"\\s*:\\s*\"none\""
+test:
+  path: /api/v1/account
+  match: "{\"token\": \"eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VybmFtZSI6ImFkbWluIn0.\"}"
+  no_match: "{\"token\": \"eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiYWxpY2UifQ.sig\"}"

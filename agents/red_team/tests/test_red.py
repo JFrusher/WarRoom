@@ -70,5 +70,5 @@ def test_profiles_control_payload_order():
 
 def test_campaign_chain_covers_every_exploit_vector():
     vectors = {vector for vector, _ in campaign.CHAIN}
-    assert vectors == {"sqli", "xss", "cmdi", "idor", "ssrf"}
+    assert vectors == {"sqli", "xss", "cmdi", "idor", "ssrf", "ssti", "jwt"}
     assert all(tactic.startswith("TA") for _, tactic in campaign.CHAIN)

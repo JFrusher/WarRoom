@@ -8,3 +8,5 @@ enabled:
   - cmdi
   - idor
   - ssrf
+  - ssti
+  - jwt

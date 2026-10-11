@@ -10,7 +10,9 @@ from __future__ import annotations
 CHAIN: list[tuple[str, str]] = [
     ("ssrf", "TA0007 Discovery"),
     ("idor", "TA0009 Collection"),
+    ("jwt", "TA0006 Credential Access"),
     ("sqli", "TA0006 Credential Access"),
+    ("ssti", "TA0002 Execution"),
     ("cmdi", "TA0002 Execution"),
     ("xss", "TA0002 Execution"),
 ]

@@ -11,6 +11,9 @@ the shared mitigation file. Nothing here reaches outside the container.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import html
 import json
 import logging
@@ -22,7 +25,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import requests
-from flask import Flask, Response, g, jsonify, render_template, request
+from flask import Flask, Response, g, jsonify, render_template, render_template_string, request
 
 from config import settings
 from src import db, events, flags, scenario, state
@@ -269,6 +272,96 @@ def honeytoken():
         f"-- database backup\nINSERT INTO flags VALUES ('{_DECOY_FLAG}');\n",
         mimetype="application/sql",
     )
+
+
+def _safe_flag() -> str:
+    try:
+        return flags.current()
+    except FlagUnavailableError:
+        return ""
+
+
+# --------------------------------------------------------------------------- #
+# F) Server-side template injection
+# --------------------------------------------------------------------------- #
+@app.post("/api/v1/render")
+def render_preview():
+    if not scenario.enabled("ssti"):
+        return jsonify(error="not found"), 404
+    data = request.get_json(silent=True) or {}
+    template = str(data.get("template", ""))
+    if state.is_patched("ssti"):
+        # Safe path: treat input as data, never evaluate it as a template.
+        return jsonify(rendered=html.escape(template))
+    # Intentionally vulnerable: user input rendered as a Jinja template, which
+    # exposes the app config (where the flag lives) via {{ config['FLAG'] }}.
+    app.config["FLAG"] = _safe_flag()
+    try:
+        return jsonify(rendered=render_template_string(template))
+    except Exception as exc:  # surface template errors to the attacker
+        return jsonify(error=str(exc)), 400
+
+
+# --------------------------------------------------------------------------- #
+# G) JWT "alg: none" authentication bypass
+# --------------------------------------------------------------------------- #
+_JWT_SECRET = b"warzone-signing-secret"
+
+
+def _b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _b64url_decode(segment: str) -> bytes:
+    return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
+
+
+def _issue_jwt(username: str) -> str:
+    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    payload = _b64url(json.dumps({"username": username}).encode())
+    signing_input = f"{header}.{payload}"
+    sig = _b64url(hmac.new(_JWT_SECRET, signing_input.encode(), hashlib.sha256).digest())
+    return f"{signing_input}.{sig}"
+
+
+def _verify_jwt(token: str) -> dict | None:
+    try:
+        header_b64, payload_b64, sig = token.split(".")
+        header = json.loads(_b64url_decode(header_b64))
+        payload = json.loads(_b64url_decode(payload_b64))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    if header.get("alg") == "none":
+        # Intentionally vulnerable: an unsigned token is trusted. The patch
+        # rejects alg=none and requires a verified HS256 signature.
+        return None if state.is_patched("jwt") else payload
+    expected = _b64url(
+        hmac.new(_JWT_SECRET, f"{header_b64}.{payload_b64}".encode(), hashlib.sha256).digest()
+    )
+    return payload if hmac.compare_digest(expected, sig) else None
+
+
+@app.post("/api/v1/token")
+def issue_token():
+    if not scenario.enabled("jwt"):
+        return jsonify(error="not found"), 404
+    data = request.get_json(silent=True) or {}
+    return jsonify(token=_issue_jwt(str(data.get("username", "alice"))))
+
+
+@app.post("/api/v1/account")
+def account():
+    if not scenario.enabled("jwt"):
+        return jsonify(error="not found"), 404
+    data = request.get_json(silent=True) or {}
+    token = str(data.get("token", "")) or request.headers.get("Authorization", "").removeprefix("Bearer ")
+    claims = _verify_jwt(token)
+    if not claims:
+        return jsonify(error="invalid token"), 401
+    body = {"username": claims.get("username")}
+    if claims.get("username") == "admin":
+        body["flag"] = _safe_flag()
+    return jsonify(body)
 
 
 # --------------------------------------------------------------------------- #

@@ -1,9 +1,21 @@
 """End-to-end checks for the three intentional bugs and their patches."""
 from __future__ import annotations
 
+import base64
+import json
+
 from config import settings
 from src import app as app_module
 from src import flags
+
+
+def _jwt_none_admin() -> str:
+    def seg(obj: dict) -> str:
+        return base64.urlsafe_b64encode(
+            json.dumps(obj, separators=(",", ":")).encode()
+        ).rstrip(b"=").decode()
+
+    return f"{seg({'alg': 'none', 'typ': 'JWT'})}.{seg({'username': 'admin'})}."
 
 
 def test_sqli_auth_bypass_leaks_admin_flag(client):
@@ -109,6 +121,30 @@ def test_ssrf_patch_blocks_internal_host(client, set_mitigation):
     set_mitigation(ssrf=True)
     resp = client.post("/api/v1/fetch", json={"url": "http://metadata/"})
     assert resp.status_code == 400
+
+
+def test_ssti_evaluates_and_leaks_config_flag(client):
+    resp = client.post("/api/v1/render", json={"template": "{{ config['FLAG'] }}"})
+    assert resp.status_code == 200
+    assert flags.current() in resp.get_json()["rendered"]
+
+
+def test_ssti_patch_returns_literal(client, set_mitigation):
+    set_mitigation(ssti=True)
+    resp = client.post("/api/v1/render", json={"template": "{{ config['FLAG'] }}"})
+    assert flags.current() not in resp.get_json()["rendered"]
+
+
+def test_jwt_alg_none_forges_admin(client):
+    resp = client.post("/api/v1/account", json={"token": _jwt_none_admin()})
+    assert resp.status_code == 200
+    assert resp.get_json()["flag"] == flags.current()
+
+
+def test_jwt_patch_rejects_alg_none(client, set_mitigation):
+    set_mitigation(jwt=True)
+    resp = client.post("/api/v1/account", json={"token": _jwt_none_admin()})
+    assert resp.status_code == 401
 
 
 def test_honeytoken_serves_decoy_not_the_real_flag(client):

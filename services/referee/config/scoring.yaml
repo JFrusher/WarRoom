@@ -18,4 +18,4 @@ blue:
   sla_weight: 100        # multiplied by uptime fraction (0..1)
   false_positive_penalty: 40  # per benign request blocked
 
-valid_vectors: [sqli, xss, cmdi, idor, ssrf]
+valid_vectors: [sqli, xss, cmdi, idor, ssrf, ssti, jwt]

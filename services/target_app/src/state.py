@@ -16,6 +16,7 @@ from config import settings
 
 _DEFAULT_MITIGATIONS = {
     "sqli": False, "xss": False, "cmdi": False, "idor": False, "ssrf": False,
+    "ssti": False, "jwt": False,
 }
 
 

