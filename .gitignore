@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Runtime state (generated inside containers / local runs)
+*.db
+*.sqlite3
+*.log
+services/target_app/flags/flag_current.txt
+state/
+logs/
+
+.DS_Store
+.idea/
+.vscode/
