@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>War Zone - Live</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"></script>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 antialiased">
+  <div class="mx-auto max-w-6xl px-4 py-8">
+    <header class="mb-8 flex items-center justify-between">
+      <h1 class="text-2xl font-semibold tracking-tight">War Zone <span class="text-slate-500">live</span></h1>
+      <div class="flex items-center gap-2 text-xs">
+        <span id="conn-dot" class="h-2 w-2 rounded-full bg-rose-500"></span>
+        <span id="conn-text" class="text-slate-400">connecting</span>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+        <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">Score</h2>
+        <div class="mb-4 flex justify-around text-center">
+          <div>
+            <div id="score-red" class="text-3xl font-bold text-rose-400">0</div>
+            <div class="text-xs text-slate-500">Red</div>
+          </div>
+          <div>
+            <div id="score-blue" class="text-3xl font-bold text-sky-400">0</div>
+            <div class="text-xs text-slate-500">Blue</div>
+          </div>
+        </div>
+        <canvas id="score-chart" height="140"></canvas>
+      </section>
+
+      <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+        <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">Service SLA</h2>
+        <div id="uptime" class="text-4xl font-bold text-emerald-400">100%</div>
+        <p class="mt-1 text-xs text-slate-500">target uptime</p>
+        <h3 class="mt-6 mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Patches</h3>
+        <div id="mitigations" class="flex flex-wrap gap-2"></div>
+      </section>
+
+      <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+        <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">Vectors seen</h2>
+        <div id="vector-tally" class="space-y-2 text-sm text-slate-300"></div>
+      </section>
+    </div>
+
+    <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+      <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">Attack &amp; defence feed</h2>
+      <ul id="feed" class="space-y-1 font-mono text-xs"></ul>
+    </section>
+  </div>
+
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>
