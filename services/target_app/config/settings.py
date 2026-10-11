@@ -37,3 +37,13 @@ DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://dashboard:8080")
 
 LISTEN_HOST = os.getenv("LISTEN_HOST", "0.0.0.0")
 LISTEN_PORT = int(os.getenv("LISTEN_PORT", "5000"))
+
+# Which scenario (set of enabled vulnerabilities) this instance runs.
+SCENARIO = os.getenv("SCENARIO", "default")
+SCENARIO_FILE = Path(
+    os.getenv("SCENARIO_FILE",
+              str(Path(__file__).resolve().parents[1] / "scenarios" / f"{SCENARIO}.yaml"))
+)
+
+# Hosts the SSRF-patched fetch endpoint refuses (internal / link-local).
+SSRF_BLOCKED_HOSTS = ("metadata", "localhost", "127.0.0.1", "169.254.169.254", "0.0.0.0")

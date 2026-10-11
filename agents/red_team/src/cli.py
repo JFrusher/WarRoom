@@ -11,11 +11,11 @@ import sys
 
 from src import client, recon, report, submit
 from src.errors import ExploitFailed, RedTeamError
-from src.exploits import cmdi, sqli, xss
+from src.exploits import cmdi, idor, sqli, ssrf, xss
 
 log = logging.getLogger("red.cli")
 
-_EXPLOITS = {mod.VECTOR: mod for mod in (sqli, xss, cmdi)}
+_EXPLOITS = {mod.VECTOR: mod for mod in (sqli, xss, cmdi, idor, ssrf)}
 
 
 def _run_exploit(sess, vector: str) -> bool:
@@ -65,6 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("sqli", help="run the SQL injection exploit")
     sub.add_parser("xss", help="run the stored XSS exploit")
     sub.add_parser("cmdi", help="run the command injection exploit")
+    sub.add_parser("idor", help="run the IDOR exploit")
+    sub.add_parser("ssrf", help="run the SSRF exploit")
     sub.add_parser("full-auto", help="recon, exploit every vector, and submit")
     return parser
 

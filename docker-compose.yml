@@ -23,6 +23,19 @@ services:
     networks:
       - warzone
 
+  # Internal-only metadata service: the SSRF prize. No published ports, so it
+  # is reachable only from inside the lab network — SSRF is the only way in.
+  metadata:
+    build: ./services/metadata
+    image: warzone/metadata
+    container_name: warzone_metadata
+    environment:
+      STATE_DIR: /var/lib/warzone
+    volumes:
+      - state:/var/lib/warzone:ro
+    networks:
+      - warzone
+
   target_app:
     build: ./services/target_app
     image: warzone/target_app

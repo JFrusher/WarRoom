@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from config import settings
+from src import app as app_module
 from src import flags
 
 
@@ -73,6 +74,40 @@ def test_cmdi_patch_rejects_metacharacters(client, set_mitigation):
         "/api/v1/diagnostics/ping",
         json={"host": "127.0.0.1; cat /etc/passwd"},
     )
+    assert resp.status_code == 400
+
+
+def test_idor_leaks_admin_profile_flag(client):
+    resp = client.get("/api/v1/users/1/profile")
+    assert resp.status_code == 200
+    assert resp.get_json()["flag"] == flags.current()
+
+
+def test_idor_patch_requires_matching_session(client, set_mitigation):
+    set_mitigation(idor=True)
+    assert client.get("/api/v1/users/1/profile").status_code == 403
+
+
+class _StubResponse:
+    status_code = 200
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+def test_ssrf_fetches_internal_metadata(client, monkeypatch):
+    flag = flags.current()
+    monkeypatch.setattr(
+        app_module.requests, "get",
+        lambda url, timeout=0: _StubResponse(f'{{"flag": "{flag}"}}'),
+    )
+    resp = client.post("/api/v1/fetch", json={"url": "http://metadata/"})
+    assert flag in resp.get_json()["body"]
+
+
+def test_ssrf_patch_blocks_internal_host(client, set_mitigation):
+    set_mitigation(ssrf=True)
+    resp = client.post("/api/v1/fetch", json={"url": "http://metadata/"})
     assert resp.status_code == 400
 
 

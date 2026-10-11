@@ -19,11 +19,13 @@ import subprocess
 import threading
 import time
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
+import requests
 from flask import Flask, Response, g, jsonify, render_template, request
 
 from config import settings
-from src import db, events, flags, state
+from src import db, events, flags, scenario, state
 from src.errors import DiagnosticsError, FlagUnavailableError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
@@ -198,6 +200,55 @@ def _run_ping(host: str) -> str:
     except subprocess.TimeoutExpired as exc:
         raise DiagnosticsError("command timed out") from exc
     return proc.stdout or proc.stderr
+
+
+# --------------------------------------------------------------------------- #
+# D) Insecure direct object reference (broken object-level authorization)
+# --------------------------------------------------------------------------- #
+@app.get("/api/v1/users/<int:uid>/profile")
+def user_profile(uid: int):
+    if not scenario.enabled("idor"):
+        return jsonify(error="not found"), 404
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT id, username, role FROM users WHERE id = ?", (uid,)
+        ).fetchone()
+    if row is None:
+        return jsonify(error="no such user"), 404
+    if state.is_patched("idor") and request.headers.get("X-Session") != f"sess-{uid}":
+        # Safe path: you may only read your own profile.
+        return jsonify(error="forbidden"), 403
+
+    profile = {"id": row["id"], "username": row["username"], "role": row["role"]}
+    if row["role"] == "admin":
+        # The admin's profile carries the flag; without the authz check any
+        # caller can read it by walking ids.
+        try:
+            profile["flag"] = flags.current()
+        except FlagUnavailableError:
+            pass
+    return jsonify(profile)
+
+
+# --------------------------------------------------------------------------- #
+# E) Server-side request forgery
+# --------------------------------------------------------------------------- #
+@app.post("/api/v1/fetch")
+def fetch_url():
+    if not scenario.enabled("ssrf"):
+        return jsonify(error="not found"), 404
+    data = request.get_json(silent=True) or {}
+    url = str(data.get("url", ""))
+
+    if state.is_patched("ssrf"):
+        host = (urlparse(url).hostname or "").lower()
+        if host in settings.SSRF_BLOCKED_HOSTS or host.startswith(("10.", "192.168.", "172.")):
+            return jsonify(error="blocked host"), 400
+    try:
+        resp = requests.get(url, timeout=3)
+    except requests.RequestException as exc:
+        return jsonify(error=str(exc)), 502
+    return jsonify(url=url, status=resp.status_code, body=resp.text[:2000])
 
 
 # --------------------------------------------------------------------------- #

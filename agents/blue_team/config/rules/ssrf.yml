@@ -1,0 +1,17 @@
+id: ssrf-internal-target
+title: SSRF — fetch aimed at an internal or link-local host
+vector: ssrf
+severity: high
+mitre: T1190            # Exploit Public-Facing Application
+path: /api/v1/fetch     # scope: only the URL-fetch endpoint, not ordinary pings
+patterns:
+  - "metadata"
+  - "169\\.254\\.169\\.254"
+  - "localhost"
+  - "127\\.0\\.0\\.1"
+  - "://10\\."
+  - "://192\\.168\\."
+test:
+  path: /api/v1/fetch
+  match: "{\"url\": \"http://metadata/\"}"
+  no_match: "{\"url\": \"https://example.com/logo.png\"}"

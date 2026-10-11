@@ -64,10 +64,12 @@ def test_rules_load_with_required_metadata():
 def test_each_rule_matches_its_own_fixture():
     for rule in signatures.load():
         fixture = rule.get("test", {})
+        path = fixture.get("path", "")
         if "match" in fixture:
-            assert waf.inspect({"body": fixture["match"]}), rule["id"]
+            assert waf.inspect({"body": fixture["match"], "path": path}), rule["id"]
         if "no_match" in fixture:
-            assert rule["vector"] not in waf.inspect({"body": fixture["no_match"]}), rule["id"]
+            entry = {"body": fixture["no_match"], "path": path}
+            assert rule["vector"] not in waf.inspect(entry), rule["id"]
 
 
 def test_matched_rules_expose_mitre_technique():

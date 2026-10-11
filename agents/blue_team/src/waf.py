@@ -9,9 +9,20 @@ def _haystack(entry: dict) -> str:
 
 
 def matched_rules(entry: dict) -> list[dict]:
-    """Return the detection rules whose patterns match this request."""
+    """Return the detection rules whose patterns match this request.
+
+    A rule may scope itself to a path prefix so an endpoint-specific signature
+    (e.g. SSRF on the fetch endpoint) does not fire on unrelated traffic.
+    """
     hay = _haystack(entry)
-    return [r for r in signatures.load() if any(p.search(hay) for p in r["compiled"])]
+    path = str(entry.get("path", ""))
+    matched = []
+    for rule in signatures.load():
+        if rule.get("path") and rule["path"] not in path:
+            continue
+        if any(p.search(hay) for p in rule["compiled"]):
+            matched.append(rule)
+    return matched
 
 
 def inspect(entry: dict) -> list[str]:
