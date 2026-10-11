@@ -111,6 +111,14 @@ def test_ssrf_patch_blocks_internal_host(client, set_mitigation):
     assert resp.status_code == 400
 
 
+def test_honeytoken_serves_decoy_not_the_real_flag(client):
+    resp = client.get("/admin/backup.sql")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "decoy" in body
+    assert flags.current() not in body
+
+
 def test_target_mirrors_the_referee_flag(client):
     # The target leaks whatever the referee published; it no longer scores.
     assert flags.current() == "WARZONE{deadbeefdeadbeefdeadbeef}"

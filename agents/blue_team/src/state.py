@@ -46,10 +46,19 @@ def enable_mitigation(vector: str) -> bool:
 
 def block_ip(ip: str) -> bool:
     """Add ``ip`` to the rate-limit blocklist. Return True if newly added."""
+    return _append_unique(settings.BLOCKLIST_FILE, ip)
+
+
+def throttle_ip(ip: str) -> bool:
+    """Add ``ip`` to the throttle list (slowed, not blocked). True if new."""
+    return _append_unique(settings.THROTTLE_FILE, ip)
+
+
+def _append_unique(path, value: str) -> bool:
     settings.STATE_DIR.mkdir(parents=True, exist_ok=True)
-    current = _read(settings.BLOCKLIST_FILE, [])
-    if ip in current:
+    current = _read(path, [])
+    if value in current:
         return False
-    current.append(ip)
-    _atomic_write(settings.BLOCKLIST_FILE, json.dumps(current))
+    current.append(value)
+    _atomic_write(path, json.dumps(current))
     return True

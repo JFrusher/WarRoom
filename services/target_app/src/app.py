@@ -43,9 +43,13 @@ _XSS_STEAL_MARKER = "warzone-steal"
 @app.before_request
 def _enforce_blocklist():
     g.request_body = request.get_data(as_text=True)
-    if request.remote_addr in state.blocked_ips():
+    ip = request.remote_addr
+    if ip in state.blocked_ips():
         _log_request(status=429)
         return jsonify(error="rate limited"), 429
+    if ip in state.throttled_ips():
+        # Blue's intermediate tier: slowed, not blocked, so the SLA holds.
+        time.sleep(settings.THROTTLE_DELAY_SECONDS)
     return None
 
 
@@ -249,6 +253,22 @@ def fetch_url():
     except requests.RequestException as exc:
         return jsonify(error=str(exc)), 502
     return jsonify(url=url, status=resp.status_code, body=resp.text[:2000])
+
+
+# --------------------------------------------------------------------------- #
+# Honeytoken: a decoy no legitimate client should ever request
+# --------------------------------------------------------------------------- #
+_DECOY_FLAG = "WARZONE{decoy-do-not-submit}"
+
+
+@app.get("/admin/backup.sql")
+def honeytoken():
+    # No real user has a reason to hit this, so any access is a high-fidelity
+    # signal for the blue team. The token here is a decoy the referee rejects.
+    return Response(
+        f"-- database backup\nINSERT INTO flags VALUES ('{_DECOY_FLAG}');\n",
+        mimetype="application/sql",
+    )
 
 
 # --------------------------------------------------------------------------- #

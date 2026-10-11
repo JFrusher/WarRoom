@@ -9,6 +9,7 @@ APP_LOG = Path(os.getenv("APP_LOG", "/var/log/app.log"))
 STATE_DIR = Path(os.getenv("STATE_DIR", "/var/lib/warzone"))
 MITIGATIONS_FILE = STATE_DIR / "mitigations.json"
 BLOCKLIST_FILE = STATE_DIR / "blocklist.json"
+THROTTLE_FILE = STATE_DIR / "throttle.json"
 
 # Detections go to the referee, which scores them and forwards to the
 # dashboard. The referee is the single scoreboard authority.

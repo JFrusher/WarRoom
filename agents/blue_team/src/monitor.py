@@ -15,6 +15,7 @@ from pathlib import Path
 
 from config import rules, settings
 from src import report, state, waf
+from src.behaviour import BehaviourDetector
 from src.scoring import ThreatTable
 
 log = logging.getLogger("blue.monitor")
@@ -39,16 +40,22 @@ def tail(path: Path) -> Iterator[str]:
             yield line
 
 
-def handle(entry: dict, table: ThreatTable) -> None:
+def handle(entry: dict, table: ThreatTable, behaviour: BehaviourDetector) -> None:
     ip = entry.get("ip") or "unknown"
     if ip in rules.WHITELIST:
         return
 
     matched = waf.matched_rules(entry)
-    if not matched:
+    behavioural = behaviour.inspect(entry)
+    if not matched and not behavioural:
         return
-    hits = [r["vector"] for r in matched]
-    techniques = sorted({r["mitre"] for r in matched})
+
+    hits = list(dict.fromkeys(
+        [r["vector"] for r in matched] + [b["vector"] for b in behavioural]
+    ))
+    techniques = sorted(
+        {r["mitre"] for r in matched} | {t for b in behavioural for t in b["techniques"]}
+    )
 
     score = table.record(ip, len(hits))
     log.info("detected %s from %s (score=%d)", ",".join(hits), ip, score)
@@ -58,9 +65,17 @@ def handle(entry: dict, table: ThreatTable) -> None:
     patched = [v for v in hits if state.enable_mitigation(v)]
     for vector in patched:
         log.info("hot-patched %s", vector)
-    blocked = table.should_block(ip) and state.block_ip(ip)
-    if blocked:
-        log.info("rate-limiting %s", ip)
+
+    # Graduated response: observe < throttle < block, by threat score.
+    blocked = throttled = False
+    if score >= rules.BLOCK_THRESHOLD:
+        blocked = state.block_ip(ip)
+        if blocked:
+            log.info("rate-limiting %s", ip)
+    elif score >= rules.THROTTLE_THRESHOLD:
+        throttled = state.throttle_ip(ip)
+        if throttled:
+            log.info("throttling %s", ip)
 
     report.emit("detection", {"ip": ip, "vectors": hits,
                               "techniques": techniques, "score": score})
@@ -68,19 +83,22 @@ def handle(entry: dict, table: ThreatTable) -> None:
         report.emit("mitigation", {"vector": vector})
     if blocked:
         report.emit("block", {"ip": ip})
+    if throttled:
+        report.emit("throttle", {"ip": ip})
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(name)s %(message)s")
     log.info("blue team online, tailing %s", settings.APP_LOG)
     table = ThreatTable()
+    behaviour = BehaviourDetector()
     for line in tail(settings.APP_LOG):
         try:
             entry = json.loads(line)
         except json.JSONDecodeError:
             continue
         if isinstance(entry, dict):
-            handle(entry, table)
+            handle(entry, table, behaviour)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from config import rules, settings
-from src import signatures, state, waf
+from src import behaviour, signatures, state, waf
 from src.scoring import ThreatTable
 
 
@@ -75,3 +75,20 @@ def test_each_rule_matches_its_own_fixture():
 def test_matched_rules_expose_mitre_technique():
     matched = waf.matched_rules({"body": "<script>warzone-steal</script>"})
     assert any(rule["mitre"] == "T1059.007" for rule in matched)
+
+
+def test_honeytoken_fires_only_on_decoy_path():
+    assert "honeytoken" in waf.inspect({"path": "/admin/backup.sql"})
+    assert "honeytoken" not in waf.inspect({"path": "/api/v1/comments"})
+
+
+def test_behaviour_detects_idor_enumeration():
+    detector = behaviour.BehaviourDetector()
+    assert detector.inspect({"ip": "9.9.9.9", "path": "/api/v1/users/1/profile"}) == []
+    hits = detector.inspect({"ip": "9.9.9.9", "path": "/api/v1/users/2/profile"})
+    assert any(h["vector"] == "idor" for h in hits)
+
+
+def test_throttle_ip_persists():
+    assert state.throttle_ip("10.0.0.7") is True
+    assert "10.0.0.7" in json.loads(settings.THROTTLE_FILE.read_text())

@@ -26,6 +26,10 @@ APP_LOG = Path(os.getenv("APP_LOG", "/var/log/app.log"))
 STATE_DIR = Path(os.getenv("STATE_DIR", "/var/lib/warzone"))
 MITIGATIONS_FILE = STATE_DIR / "mitigations.json"
 BLOCKLIST_FILE = STATE_DIR / "blocklist.json"
+THROTTLE_FILE = STATE_DIR / "throttle.json"
+
+# Added latency for a throttled IP (blue's intermediate response tier).
+THROTTLE_DELAY_SECONDS = float(os.getenv("THROTTLE_DELAY_SECONDS", "0.3"))
 
 # The referee owns the flag and publishes it here; the target mirrors it into
 # its DB and flag file so the vulnerabilities leak the live value.

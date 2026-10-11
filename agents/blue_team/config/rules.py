@@ -10,7 +10,10 @@ import os
 # Threat points added to an IP's running score for each detected hit.
 HIT_SCORE = 10
 
-# Once an IP crosses this score it is rate-limited (blocked).
+# Graduated response ladder by threat score: observe < throttle < block.
+# Hot-patching the matched vector happens on first detection, independent of
+# these thresholds.
+THROTTLE_THRESHOLD = 15
 BLOCK_THRESHOLD = 25
 
 # Infrastructure IPs that must never be blocked, to protect the SLA.

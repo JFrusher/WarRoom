@@ -1,0 +1,11 @@
+id: honeytoken-admin-backup
+title: Honeytoken — access to the decoy admin backup
+vector: honeytoken
+severity: critical
+mitre: T1083            # File and Directory Discovery
+path: /admin/backup.sql  # scope: this decoy path only
+patterns:
+  - "backup\\.sql"
+test:
+  path: /admin/backup.sql
+  match: "/admin/backup.sql"

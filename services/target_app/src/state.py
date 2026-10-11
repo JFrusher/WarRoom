@@ -39,3 +39,8 @@ def is_patched(vuln: str) -> bool:
 def blocked_ips() -> set[str]:
     data = _read_json(settings.BLOCKLIST_FILE, [])
     return set(data) if isinstance(data, list) else set()
+
+
+def throttled_ips() -> set[str]:
+    data = _read_json(settings.THROTTLE_FILE, [])
+    return set(data) if isinstance(data, list) else set()
