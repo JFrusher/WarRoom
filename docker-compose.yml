@@ -1,0 +1,84 @@
+name: warzone
+
+# Attack/Defend Web CTF War Zone.
+#
+# Everything is confined to this Compose project's private bridge network.
+# The only ports published to the host are the target UI (5000) and the
+# dashboard (8080), both bound to loopback so nothing is exposed off-box.
+
+services:
+  target_app:
+    build: ./services/target_app
+    image: warzone/target_app
+    container_name: warzone_target
+    ports:
+      - "127.0.0.1:5000:5000"
+    environment:
+      DASHBOARD_URL: http://dashboard:8080
+      FLAG_ROTATE_SECONDS: "180"
+    volumes:
+      - logs:/var/log
+      - state:/var/lib/warzone
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/healthz',timeout=2).status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - warzone
+
+  blue_team:
+    build: ./agents/blue_team
+    image: warzone/blue_team
+    container_name: warzone_blue
+    environment:
+      TARGET_URL: http://target_app:5000
+      DASHBOARD_URL: http://dashboard:8080
+      APP_LOG: /var/log/app.log
+    volumes:
+      - logs:/var/log
+      - state:/var/lib/warzone
+    depends_on:
+      target_app:
+        condition: service_healthy
+    networks:
+      - warzone
+
+  dashboard:
+    build: ./dashboard
+    image: warzone/dashboard
+    container_name: warzone_dashboard
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      TARGET_URL: http://target_app:5000
+    depends_on:
+      target_app:
+        condition: service_started
+    networks:
+      - warzone
+
+  # Oneshot attacker. Not started by `up`; launch it explicitly:
+  #   docker compose run --rm red_team full-auto
+  red_team:
+    build: ./agents/red_team
+    image: warzone/red_team
+    container_name: warzone_red
+    environment:
+      TARGET_URL: http://target_app:5000
+      DASHBOARD_URL: http://dashboard:8080
+    depends_on:
+      target_app:
+        condition: service_healthy
+    profiles:
+      - attack
+    networks:
+      - warzone
+
+volumes:
+  logs:
+  state:
+
+networks:
+  warzone:
+    driver: bridge
