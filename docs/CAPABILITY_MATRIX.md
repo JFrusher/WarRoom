@@ -9,7 +9,7 @@ view: every offensive capability lined up against its detection and its fix.
 | Stored XSS | A03 | T1059.007 | `exploits/xss` — admin-bot leak | signature `xss` | escape on render |
 | Command injection | A03 | T1059 | `exploits/cmdi` — file read | signature `cmdi` | arg list, no shell |
 | IDOR | A01 | T1087 | `exploits/idor` — object walk | **behavioural** (enumeration) | per-object authz check |
-| SSRF | A10 | T1190 | `exploits/ssrf` — hit metadata | signature `ssrf` (path-scoped) | host allow-list + egress isolation |
+| SSRF | A10 | T1190 | `exploits/ssrf` — hit metadata | signature `ssrf` (path-scoped) | blocked-host set + private-prefix checks; network isolation |
 | SSTI | A03 | T1190 | `exploits/ssti` — `{{ config }}` | signature `ssti` (path-scoped) | render input as data |
 | JWT alg=none | A07/A02 | T1550 | `exploits/jwt` — forged admin | signature `jwt` (path-scoped) | reject `none`, verify HS256 |
 | Honeytoken | — | T1083 | (trap; no exploit) | signature `honeytoken` (critical) | — (decoy by design) |

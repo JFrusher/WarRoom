@@ -18,6 +18,7 @@ import html
 import json
 import logging
 import re
+import secrets
 import subprocess
 import threading
 import time
@@ -38,6 +39,11 @@ app = Flask(__name__, template_folder="../templates")
 
 _HOST_RE = re.compile(r"^[A-Za-z0-9.\-]{1,253}$")
 _XSS_STEAL_MARKER = "warzone-steal"
+
+# Opaque server-side sessions: random token -> user id. The IDOR patch
+# resolves a caller's X-Session through this map instead of trusting a
+# guessable "sess-<id>" string.
+_sessions: dict[str, int] = {}
 
 
 # --------------------------------------------------------------------------- #
@@ -137,7 +143,9 @@ def login():
     if row is None:
         return jsonify(error="invalid credentials"), 401
 
-    body = {"username": row["username"], "role": row["role"], "token": f"sess-{row['id']}"}
+    token = secrets.token_hex(16)
+    _sessions[token] = row["id"]
+    body = {"username": row["username"], "role": row["role"], "token": token}
     if row["role"] == "admin":
         # Admin console leaks the live flag to whoever reaches it.
         try:
@@ -222,8 +230,9 @@ def user_profile(uid: int):
         ).fetchone()
     if row is None:
         return jsonify(error="no such user"), 404
-    if state.is_patched("idor") and request.headers.get("X-Session") != f"sess-{uid}":
-        # Safe path: you may only read your own profile.
+    if state.is_patched("idor") and _sessions.get(request.headers.get("X-Session", "")) != uid:
+        # Safe path: resolve the opaque session to its owner and allow only
+        # that user to read their own profile. A forged header has no mapping.
         return jsonify(error="forbidden"), 403
 
     profile = {"id": row["id"], "username": row["username"], "role": row["role"]}
@@ -346,7 +355,12 @@ def issue_token():
     if not scenario.enabled("jwt"):
         return jsonify(error="not found"), 404
     data = request.get_json(silent=True) or {}
-    return jsonify(token=_issue_jwt(str(data.get("username", "alice"))))
+    username = str(data.get("username", "alice"))
+    if username == "admin":
+        # The token endpoint never mints admin tokens from caller input; the
+        # only route to admin is the alg=none forgery, which the patch blocks.
+        return jsonify(error="cannot issue an admin token"), 403
+    return jsonify(token=_issue_jwt(username))
 
 
 @app.post("/api/v1/account")

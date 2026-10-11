@@ -14,7 +14,9 @@ from config import settings
 
 def append(kind: str, payload: dict) -> dict:
     """Append one timestamped entry and return it."""
-    entry = {"ts": datetime.now(timezone.utc).isoformat(), "kind": kind, **payload}
+    # Reserved fields go last so caller-supplied payload cannot override the
+    # referee-owned timestamp or kind (a bad ts would break report parsing).
+    entry = {**payload, "ts": datetime.now(timezone.utc).isoformat(), "kind": kind}
     settings.STATE_DIR.mkdir(parents=True, exist_ok=True)
     with settings.JOURNAL.open("a") as fh:
         fh.write(json.dumps(entry) + "\n")

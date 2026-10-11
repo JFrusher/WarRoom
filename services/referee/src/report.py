@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from datetime import datetime
 
-from src import journal
+from src import journal, scoring
 
 
 def _ts(entry: dict) -> datetime:
@@ -29,7 +29,7 @@ def _latency_by_vector(entries: list[dict], kind: str, round_start: dict[str, da
     return {v: round(s, 2) for v, s in out.items()}
 
 
-def build() -> dict:
+def build(uptime: float | None = None) -> dict:
     entries = journal.read_all()
     captures = [e for e in entries if e["kind"] == "flag_captured"]
     detections = [e for e in entries if e["kind"] == "detection"]
@@ -38,6 +38,8 @@ def build() -> dict:
 
     red = sum(e.get("points", 0) for e in captures)
     blue = sum(e.get("points", 0) for e in entries if e.get("team") == "blue")
+    if uptime is not None:  # same SLA term the live scoreboard applies
+        blue += scoring.sla_points(uptime)
 
     return {
         "rounds": list(round_start),

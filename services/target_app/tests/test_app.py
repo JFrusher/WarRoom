@@ -100,6 +100,22 @@ def test_idor_patch_requires_matching_session(client, set_mitigation):
     assert client.get("/api/v1/users/1/profile").status_code == 403
 
 
+def test_idor_patch_rejects_forged_session(client, set_mitigation):
+    set_mitigation(idor=True)
+    resp = client.get("/api/v1/users/1/profile", headers={"X-Session": "sess-1"})
+    assert resp.status_code == 403
+
+
+def test_idor_patch_allows_own_profile_with_real_session(client, set_mitigation):
+    set_mitigation(idor=True)
+    token = client.post(
+        "/api/v1/auth/login", json={"username": "alice", "password": "password123"}
+    ).get_json()["token"]
+    # alice is user id 2; her session reads her own profile but not admin's.
+    assert client.get("/api/v1/users/2/profile", headers={"X-Session": token}).status_code == 200
+    assert client.get("/api/v1/users/1/profile", headers={"X-Session": token}).status_code == 403
+
+
 class _StubResponse:
     status_code = 200
 
@@ -145,6 +161,10 @@ def test_jwt_patch_rejects_alg_none(client, set_mitigation):
     set_mitigation(jwt=True)
     resp = client.post("/api/v1/account", json={"token": _jwt_none_admin()})
     assert resp.status_code == 401
+
+
+def test_token_endpoint_refuses_to_issue_admin(client):
+    assert client.post("/api/v1/token", json={"username": "admin"}).status_code == 403
 
 
 def test_honeytoken_serves_decoy_not_the_real_flag(client):

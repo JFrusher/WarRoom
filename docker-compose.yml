@@ -34,7 +34,9 @@ services:
     volumes:
       - state:/var/lib/warzone:ro
     networks:
-      - warzone
+      # backend only: the red agent is not on this network, so the metadata
+      # flag is reachable only by coercing the target to fetch it (SSRF).
+      - backend
 
   target_app:
     build: ./services/target_app
@@ -56,7 +58,9 @@ services:
       timeout: 3s
       retries: 5
     networks:
+      # warzone: reachable by red/referee/dashboard. backend: reach metadata.
       - warzone
+      - backend
 
   blue_team:
     build: ./agents/blue_team
@@ -118,5 +122,9 @@ networks:
   # traffic and the loopback-published UI/dashboard ports are unaffected;
   # image builds use the separate build network, so pip/apt still work.
   warzone:
+    driver: bridge
+    internal: true
+  # Target <-> metadata only; red_team is deliberately kept off this network.
+  backend:
     driver: bridge
     internal: true

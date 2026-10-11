@@ -79,15 +79,16 @@ class Match:
         event (with awarded points) for forwarding to the dashboard."""
         kind = event.get("kind")
         with self._lock:
+            valid = scoring.valid_vectors()
             points = 0
             if kind == "detection":
                 for vector in event.get("vectors", []):
-                    if vector not in self._detected:
+                    if vector in valid and vector not in self._detected:
                         self._detected[vector] = self._elapsed()
                         points += scoring.blue_detect_points(self._detected[vector])
             elif kind == "mitigation":
                 vector = event.get("vector")
-                if vector and vector not in self._mitigated:
+                if vector in valid and vector not in self._mitigated:
                     self._mitigated.add(vector)
                     points = scoring.blue_mitigate_points(self._elapsed())
             self.blue_score += points
@@ -104,11 +105,26 @@ class Match:
     def uptime(self) -> float:
         return self.sla_ok / self.sla_total if self.sla_total else 1.0
 
+    def restore(self) -> None:
+        """Rebuild cumulative scores from the durable journal after a restart,
+        so /state agrees with the journal-based /report."""
+        with self._lock:
+            entries = journal.read_all()
+            self.red_score = sum(
+                e.get("points", 0) for e in entries if e.get("kind") == "flag_captured"
+            )
+            self.blue_score = sum(
+                e.get("points", 0) for e in entries if e.get("team") == "blue"
+            )
+
     def state(self) -> dict:
         with self._lock:
+            # SLA is a live metric (not journalled); fold it into the blue
+            # total so availability counts, per the rubric's sla_weight.
+            blue = self.blue_score + scoring.sla_points(self.uptime())
             return {
                 "round": self.round_id,
-                "scores": {"red": self.red_score, "blue": self.blue_score},
+                "scores": {"red": self.red_score, "blue": blue},
                 "uptime": round(100 * self.uptime(), 2),
                 "captured": sorted(self._captured),
                 "detected": sorted(self._detected),

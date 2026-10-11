@@ -60,7 +60,7 @@ def state():
 
 @app.get("/report")
 def report():
-    return jsonify(report_mod.build())
+    return jsonify(report_mod.build(match.uptime()))
 
 
 @app.post("/round/start")
@@ -91,6 +91,7 @@ def _rotator() -> None:
 
 
 def _bootstrap() -> None:
+    match.restore()  # carry cumulative scores across a referee restart
     match.start_round()
     threading.Thread(target=_sla_prober, name="sla-prober", daemon=True).start()
     threading.Thread(target=_rotator, name="flag-rotator", daemon=True).start()
