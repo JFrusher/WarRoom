@@ -44,9 +44,11 @@ def handle(entry: dict, table: ThreatTable) -> None:
     if ip in rules.WHITELIST:
         return
 
-    hits = waf.inspect(entry)
-    if not hits:
+    matched = waf.matched_rules(entry)
+    if not matched:
         return
+    hits = [r["vector"] for r in matched]
+    techniques = sorted({r["mitre"] for r in matched})
 
     score = table.record(ip, len(hits))
     log.info("detected %s from %s (score=%d)", ",".join(hits), ip, score)
@@ -60,7 +62,8 @@ def handle(entry: dict, table: ThreatTable) -> None:
     if blocked:
         log.info("rate-limiting %s", ip)
 
-    report.emit("detection", {"ip": ip, "vectors": hits, "score": score})
+    report.emit("detection", {"ip": ip, "vectors": hits,
+                              "techniques": techniques, "score": score})
     for vector in patched:
         report.emit("mitigation", {"vector": vector})
     if blocked:

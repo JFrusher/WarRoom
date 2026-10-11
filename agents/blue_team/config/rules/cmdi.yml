@@ -1,0 +1,12 @@
+id: cmdi-shell
+title: Command injection — shell metacharacter into a system command
+vector: cmdi
+severity: high
+mitre: T1059            # Command and Scripting Interpreter
+patterns:
+  - ";\\s*(cat|ls|id|whoami)\\b"
+  - "\\|\\s*(cat|ls|id|whoami)\\b"
+  - "/etc/passwd"
+test:
+  match: "127.0.0.1; cat /flags/x"
+  no_match: "127.0.0.1"

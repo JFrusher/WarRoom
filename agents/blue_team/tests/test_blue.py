@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from config import rules, settings
-from src import state, waf
+from src import signatures, state, waf
 from src.scoring import ThreatTable
 
 
@@ -51,3 +51,25 @@ def test_enable_mitigation_is_idempotent():
 def test_block_ip_persists():
     assert state.block_ip("10.0.0.9") is True
     assert "10.0.0.9" in json.loads(settings.BLOCKLIST_FILE.read_text())
+
+
+def test_rules_load_with_required_metadata():
+    loaded = signatures.load()
+    assert loaded
+    for rule in loaded:
+        assert {"id", "title", "vector", "severity", "mitre"} <= rule.keys()
+        assert rule["compiled"]
+
+
+def test_each_rule_matches_its_own_fixture():
+    for rule in signatures.load():
+        fixture = rule.get("test", {})
+        if "match" in fixture:
+            assert waf.inspect({"body": fixture["match"]}), rule["id"]
+        if "no_match" in fixture:
+            assert rule["vector"] not in waf.inspect({"body": fixture["no_match"]}), rule["id"]
+
+
+def test_matched_rules_expose_mitre_technique():
+    matched = waf.matched_rules({"body": "<script>warzone-steal</script>"})
+    assert any(rule["mitre"] == "T1059.007" for rule in matched)
