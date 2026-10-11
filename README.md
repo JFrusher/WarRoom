@@ -49,20 +49,20 @@ to the dashboard, which keeps the score and streams the feed to the browser.
 
 Each bug has a safe code path that the blue team switches on at runtime.
 
-### SQL injection — `POST /api/v1/auth/login`
+### SQL injection: `POST /api/v1/auth/login`
 
 Credentials are concatenated straight into the query. `admin' -- ` logs in as
 the administrator, whose session response leaks the live flag. The patched path
 uses a parameterized query.
 
-### Stored XSS — `/api/v1/comments`
+### Stored XSS: `/api/v1/comments`
 
 Comment bodies are stored and rendered without escaping. A simulated admin
 browser periodically views the notes; when it hits an unescaped script payload
 it "runs" it and leaks its session flag back into the thread. The patched path
 HTML-escapes every comment on the way in.
 
-### Command injection / arbitrary file read — `POST /api/v1/diagnostics/ping`
+### Command injection / arbitrary file read: `POST /api/v1/diagnostics/ping`
 
 The host field is interpolated into a shell command, so
 `127.0.0.1; cat /flags/flag_current.txt` reads the flag file. The patched path
@@ -70,8 +70,8 @@ validates the host and runs `ping` with an argument list and no shell.
 
 ## Flags
 
-A single flag lives in two places at once — the `flags` table (reachable via
-SQLi) and `/flags/flag_current.txt` (reachable via the file read) — and the
+A single flag lives in two places at once: the `flags` table (reachable via
+SQLi) and `/flags/flag_current.txt` (reachable via the file read). The
 stored-XSS path leaks the same value at runtime. It rotates on a timer
 (`FLAG_ROTATE_SECONDS`, default 180s), and each attack class scores once per
 flag.
@@ -123,8 +123,8 @@ recovers the live flag through all three vectors.
 
 ## Threat model and mitigations
 
-A full write-up — assets, entry points, per-vector attack and defence, and the
-residual risks of the lab's own design — is in
+A full write-up, covering assets, entry points, per-vector attack and defence,
+and the residual risks of the lab's own design, is in
 [`docs/threat_model.md`](docs/threat_model.md).
 
 ## Layout

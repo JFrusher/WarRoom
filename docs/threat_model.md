@@ -19,8 +19,8 @@ risks the lab's own design carries.
 | `/api/v1/auth/login` | POST | user authentication | SQL injection |
 | `/api/v1/comments` | GET/POST | team notes | stored XSS |
 | `/api/v1/diagnostics/ping` | POST | network check | command injection / file read |
-| `/api/v1/flags/submit` | POST | score a captured flag | — |
-| `/healthz` | GET | liveness + patch state | — |
+| `/api/v1/flags/submit` | POST | score a captured flag | none |
+| `/healthz` | GET | liveness + patch state | none |
 
 ## Trust boundaries
 

@@ -38,4 +38,4 @@ keeps this project legal and ethical to use.
 
 This is a personal lab with no deployed instance and no data. If you find a way
 the agent could be coaxed into targeting something outside the allow-list, open
-an issue — that is the one class of bug that matters here.
+an issue. That is the one class of bug that matters here.
