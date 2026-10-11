@@ -43,7 +43,7 @@ suite green.
 ### Phase 2: detection-as-code
 - Blue signatures live in Sigma-style rule files, each carrying severity and a
   MITRE technique id, loaded and unit-tested.
-- MTTD / MTTR / dwell-time metrics come from the match journal.
+- MTTD / MTTR metrics come from the match journal.
 
 ### Phase 3: scenario engine + new vulns
 - `scenarios/*.yaml` select enabled vulns, difficulty, and seeded data.
