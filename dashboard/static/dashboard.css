@@ -1,0 +1,118 @@
+/* War Zone — cyber range match telemetry.
+   Self-hosted IBM Plex. No framework: borders over shadows, tabular scores,
+   monospace reserved for the log (where it carries meaning). */
+
+@font-face { font-family:"Plex Sans"; src:url(/static/vendor/fonts/plex-sans-400.woff2) format("woff2"); font-weight:400; font-display:swap; }
+@font-face { font-family:"Plex Sans"; src:url(/static/vendor/fonts/plex-sans-500.woff2) format("woff2"); font-weight:500; font-display:swap; }
+@font-face { font-family:"Plex Sans"; src:url(/static/vendor/fonts/plex-sans-600.woff2) format("woff2"); font-weight:600; font-display:swap; }
+@font-face { font-family:"Plex Mono"; src:url(/static/vendor/fonts/plex-mono-400.woff2) format("woff2"); font-weight:400; font-display:swap; }
+@font-face { font-family:"Plex Mono"; src:url(/static/vendor/fonts/plex-mono-500.woff2) format("woff2"); font-weight:500; font-display:swap; }
+
+:root{
+  --bg:#121620; --panel:#171c27; --panel-2:#1b2230; --line:#262d3a; --line-soft:#1f2634;
+  --fg:#e6e9ef; --muted:#8a93a3; --faint:#5a6474;
+  --red:#d6453f; --red-soft:#e0837d; --blue:#4c86d6; --blue-soft:#8fb4e6;
+  --gold:#c9a227; --teal:#3fa787;
+  --sans:"Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --mono:"Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:var(--sans); font-size:14px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2{margin:0; font-weight:500}
+.tnum{font-variant-numeric:tabular-nums}
+
+.shell{max-width:1200px; margin:0 auto; padding:18px 22px 26px}
+
+/* ---- top bar ---- */
+.topbar{display:flex; align-items:baseline; justify-content:space-between;
+  padding-bottom:12px; border-bottom:1px solid var(--line)}
+.brand{font-weight:600; letter-spacing:.14em; font-size:13px}
+.brand small{color:var(--faint); font-weight:400; letter-spacing:.08em; margin-left:10px}
+.status{display:flex; align-items:center; gap:16px; font-size:12.5px; color:var(--muted)}
+.status b{color:var(--fg); font-weight:500}
+.dot{width:7px; height:7px; border-radius:50%; background:var(--teal); display:inline-block;
+  margin-right:7px; box-shadow:0 0 0 3px rgba(63,167,135,.16)}
+.dot.off{background:var(--red); box-shadow:0 0 0 3px rgba(214,69,63,.16)}
+
+/* ---- scoreboard spine ---- */
+.score{display:grid; grid-template-columns:1fr 2fr 1fr; align-items:center;
+  gap:28px; padding:22px 4px 24px; border-bottom:1px solid var(--line)}
+.team{display:flex; flex-direction:column}
+.team.blue{align-items:flex-end; text-align:right}
+.team .who{font-size:12.5px; color:var(--muted)}
+.team .who b{font-weight:600}
+.team.red .who b{color:var(--red-soft)}
+.team.blue .who b{color:var(--blue-soft)}
+.team .pts{font-size:62px; line-height:1; font-weight:600; margin-top:8px; letter-spacing:-.02em}
+.team.red .pts{color:var(--red)}
+.team.blue .pts{color:var(--blue)}
+
+.spine{display:flex; flex-direction:column; gap:12px}
+.meter{height:10px; border:1px solid var(--line); border-radius:2px; overflow:hidden;
+  display:flex; background:var(--panel)}
+.meter .m-red{background:var(--red); transition:width .5s cubic-bezier(.4,0,.2,1)}
+.meter .m-blue{background:var(--blue); transition:width .5s cubic-bezier(.4,0,.2,1)}
+.spine .readout{display:flex; justify-content:space-between; font-size:12px; color:var(--muted)}
+.flag{display:flex; align-items:center; gap:8px; justify-content:center; color:var(--muted); font-size:12.5px}
+.flag svg{color:var(--gold)}
+.flag b{color:var(--gold); font-weight:500}
+
+/* ---- middle: surface + defenses ---- */
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:0; border-bottom:1px solid var(--line)}
+.col{padding:16px 18px}
+.col + .col{border-left:1px solid var(--line)}
+.col h2{font-size:12px; color:var(--muted); font-weight:500; margin-bottom:12px}
+.rowline{display:flex; align-items:center; justify-content:space-between;
+  padding:5px 0; border-bottom:1px solid var(--line-soft); font-size:13px}
+.rowline:last-child{border-bottom:0}
+.rowline .name{color:var(--fg)}
+.rowline .name.idle{color:var(--faint)}
+.rowline .val{color:var(--muted); font-variant-numeric:tabular-nums}
+.rowline .val.hot{color:var(--red-soft)}
+
+.state{display:inline-flex; align-items:center; gap:8px; font-size:13px}
+.mark{width:8px; height:8px; border-radius:1px; background:var(--faint)}
+.mark.patched{background:var(--teal)}
+.mark.exposed{background:var(--red)}
+.state .tag{font-size:11.5px}
+.state .tag.patched{color:var(--teal)}
+.state .tag.exposed{color:var(--faint)}
+
+/* ---- log ---- */
+.logwrap{padding:16px 2px 0}
+.logwrap .loghead{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px}
+.logwrap h2{font-size:12px; color:var(--muted); font-weight:500}
+.tech{display:flex; gap:6px; flex-wrap:wrap}
+.tech span{font-family:var(--mono); font-size:11px; color:var(--muted);
+  border:1px solid var(--line); border-radius:2px; padding:1px 6px}
+#feed{list-style:none; margin:0; padding:0; font-family:var(--mono); font-size:12.5px; line-height:1.9}
+#feed li{display:flex; gap:12px; white-space:nowrap}
+#feed .t{color:var(--faint)}
+#feed .side{width:38px; flex:0 0 38px}
+#feed .side.red{color:var(--red-soft)} #feed .side.blue{color:var(--blue-soft)}
+#feed .side.sys{color:var(--faint)}
+#feed .msg{color:var(--fg)}
+#feed .pts{color:var(--teal)}
+#feed li.cap .msg{color:var(--fg); font-weight:500}
+#feed li.think{color:var(--muted)}
+#feed li.think .msg{color:var(--muted); font-style:italic}
+#feed li.think .side{opacity:.7}
+#feed li.miss .msg{color:var(--faint)}
+
+@media (prefers-reduced-motion:reduce){
+  .meter .m-red,.meter .m-blue{transition:none}
+}
+@media (max-width:720px){
+  .score{grid-template-columns:1fr; gap:16px; text-align:left}
+  .team.blue{align-items:flex-start; text-align:left}
+  .team .pts{font-size:48px}
+  .cols{grid-template-columns:1fr}
+  .col + .col{border-left:0; border-top:1px solid var(--line)}
+  #feed li{white-space:normal}
+}

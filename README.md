@@ -12,9 +12,9 @@ to refuse any target but the lab (see [SECURITY.md](SECURITY.md)).
 ## See it in action
 
 The live dashboard, the eye in the sky. Red captures flags and its score
-climbs; blue detects, hot-patches (the patch chips flip green), and rate-limits
-the attacker; the SLA gauge holds at 100% because only the attacker is blocked,
-never the health checks.
+climbs; blue detects, hot-patches (defences flip from exposed to patched), and
+rate-limits the attacker; SLA holds at 100% because only the attacker is
+blocked, never the health checks.
 
 ![Red vs blue on the live dashboard](docs/media/duel.gif)
 
