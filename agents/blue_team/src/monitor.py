@@ -15,7 +15,7 @@ from pathlib import Path
 
 import agent_core
 from config import rules, settings
-from src import report, state, strategy, waf
+from src import report, strategy, waf
 from src.behaviour import BehaviourDetector
 from src.scoring import ThreatTable
 
