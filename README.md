@@ -99,6 +99,16 @@ fires, the patch chips flip to green, the attacker IP gets rate-limited, and
 later rounds capture less. The SLA gauge stays at 100% because blue only blocks
 the attacker, never the health checks.
 
+The agents run a fixed script by default. For the LLM-driven brains — where
+red and blue reason about each move and narrate it to the dashboard feed — set
+`BRAIN=llm` and export `ANTHROPIC_API_KEY` before launching. The default
+(`BRAIN=scripted`) needs no key and is what the test suite runs.
+
+```bash
+docker compose run --rm red_team agent     # scripted brain
+BRAIN=llm ANTHROPIC_API_KEY=sk-... docker compose run --rm red_team agent
+```
+
 Other red-team subcommands:
 
 ```bash

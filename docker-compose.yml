@@ -63,13 +63,17 @@ services:
       - backend
 
   blue_team:
-    build: ./agents/blue_team
+    build:
+      context: .
+      dockerfile: agents/blue_team/Dockerfile
     image: warzone/blue_team
     container_name: warzone_blue
     environment:
       TARGET_URL: http://target_app:5000
       REFEREE_URL: http://referee:9000
       APP_LOG: /var/log/app.log
+      BRAIN: ${BRAIN:-scripted}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - logs:/var/log
       - state:/var/lib/warzone
@@ -96,13 +100,17 @@ services:
   # Oneshot attacker. Not started by `up`; launch it explicitly:
   #   docker compose run --rm red_team full-auto
   red_team:
-    build: ./agents/red_team
+    build:
+      context: .
+      dockerfile: agents/red_team/Dockerfile
     image: warzone/red_team
     container_name: warzone_red
     environment:
       TARGET_URL: http://target_app:5000
       REFEREE_URL: http://referee:9000
       DASHBOARD_URL: http://dashboard:8080
+      BRAIN: ${BRAIN:-scripted}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:
       target_app:
         condition: service_healthy
