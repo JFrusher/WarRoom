@@ -41,3 +41,9 @@ def test_thought_event_is_kept_in_feed(client):
     events = client.get("/state").get_json()["events"]
     assert any(e.get("kind") == "thought" and e.get("rationale") == "pivoting to cmdi"
                for e in events)
+
+
+def test_mitigation_event_flips_patch_panel(client):
+    client.post("/ingest", json={"team": "blue", "kind": "mitigation", "vector": "sqli"})
+    snap = client.get("/state").get_json()
+    assert snap["mitigations"]["sqli"] is True
