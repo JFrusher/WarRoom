@@ -85,8 +85,10 @@ function pushEvent(event) {
   const colors = { red: "text-rose-400", blue: "text-sky-400" };
   const li = document.createElement("li");
   const time = new Date(event.ts).toLocaleTimeString();
-  const detail = event.vector || (event.vectors || []).join(",") || event.ip || "";
+  const detail =
+    event.rationale || event.vector || (event.vectors || []).join(",") || event.ip || "";
   li.className = colors[event.team] || "text-slate-400";
+  if (event.kind === "thought") li.className += " italic text-slate-500";
   li.textContent = `${time}  [${event.team || "sys"}] ${event.kind} ${detail}`;
   const feed = el("feed");
   feed.prepend(li);
