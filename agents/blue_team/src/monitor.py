@@ -13,8 +13,9 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
+import agent_core
 from config import rules, settings
-from src import report, state, waf
+from src import report, state, strategy, waf
 from src.behaviour import BehaviourDetector
 from src.scoring import ThreatTable
 
@@ -40,7 +41,8 @@ def tail(path: Path) -> Iterator[str]:
             yield line
 
 
-def handle(entry: dict, table: ThreatTable, behaviour: BehaviourDetector) -> None:
+def handle(entry: dict, table: ThreatTable, behaviour: BehaviourDetector,
+           bstate: strategy.BlueState, decide) -> None:
     ip = entry.get("ip") or "unknown"
     if ip in rules.WHITELIST:
         return
@@ -57,34 +59,16 @@ def handle(entry: dict, table: ThreatTable, behaviour: BehaviourDetector) -> Non
         {r["mitre"] for r in matched} | {t for b in behavioural for t in b["techniques"]}
     )
 
+    # Score this detection exactly once, then let the policy decide the response.
     score = table.record(ip, len(hits))
     log.info("detected %s from %s (score=%d)", ",".join(hits), ip, score)
-
-    # Enforce first, report after: a slow or unresponsive dashboard must never
-    # delay hot-patching or blocking.
-    patched = [v for v in hits if state.enable_mitigation(v)]
-    for vector in patched:
-        log.info("hot-patched %s", vector)
-
-    # Graduated response: observe < throttle < block, by threat score.
-    blocked = throttled = False
-    if score >= rules.BLOCK_THRESHOLD:
-        blocked = state.block_ip(ip)
-        if blocked:
-            log.info("rate-limiting %s", ip)
-    elif score >= rules.THROTTLE_THRESHOLD:
-        throttled = state.throttle_ip(ip)
-        if throttled:
-            log.info("throttling %s", ip)
-
     report.emit("detection", {"ip": ip, "vectors": hits,
                               "techniques": techniques, "score": score})
-    for vector in patched:
-        report.emit("mitigation", {"vector": vector})
-    if blocked:
-        report.emit("block", {"ip": ip})
-    if throttled:
-        report.emit("throttle", {"ip": ip})
+
+    bstate.ip, bstate.vectors, bstate.techniques, bstate.score = ip, hits, techniques, score
+    agent_core.drive(lambda: strategy.observe_blue(bstate), decide,
+                     lambda d: strategy.dispatch_blue(bstate, d),
+                     max_steps=6, stop=frozenset({"stop", "wait"}))
 
 
 def main() -> None:
@@ -92,13 +76,15 @@ def main() -> None:
     log.info("blue team online, tailing %s", settings.APP_LOG)
     table = ThreatTable()
     behaviour = BehaviourDetector()
+    bstate = strategy.BlueState()
+    decide = strategy.make_blue_policy()
     for line in tail(settings.APP_LOG):
         try:
             entry = json.loads(line)
         except json.JSONDecodeError:
             continue
         if isinstance(entry, dict):
-            handle(entry, table, behaviour)
+            handle(entry, table, behaviour, bstate, decide)
 
 
 if __name__ == "__main__":
