@@ -9,6 +9,24 @@ Everything is pinned to loopback and the Compose network. Nothing in here
 targets, scans, or talks to anything off your host, and the attacker is wired
 to refuse any target but the lab (see [SECURITY.md](SECURITY.md)).
 
+## See it in action
+
+The live dashboard, the eye in the sky. Red captures flags and its score
+climbs; blue detects, hot-patches (defences flip from exposed to patched), and
+rate-limits the attacker; SLA holds at 100% because only the attacker is
+blocked, never the health checks.
+
+![Red vs blue on the live dashboard](docs/media/duel.gif)
+
+With the LLM brains (`BRAIN=llm`), each side narrates its reasoning into the
+feed, so you watch the two agents think, move by move.
+
+![The agents' live reasoning feed](docs/media/reasoning.gif)
+
+> These are illustrative runs of the real dashboard driven by a representative
+> event stream, recorded without the full Compose stack. Spin up the lab with
+> `docker compose up --build` to watch a genuine round.
+
 ## What's inside
 
 | Component | Path | Role |
@@ -98,6 +116,16 @@ Watch the dashboard: red's score climbs as flags are captured, then blue's WAF
 fires, the patch chips flip to green, the attacker IP gets rate-limited, and
 later rounds capture less. The SLA gauge stays at 100% because blue only blocks
 the attacker, never the health checks.
+
+The agents run a fixed script by default. For the LLM-driven brains — where
+red and blue reason about each move and narrate it to the dashboard feed — set
+`BRAIN=llm` and export `ANTHROPIC_API_KEY` before launching. The default
+(`BRAIN=scripted`) needs no key and is what the test suite runs.
+
+```bash
+docker compose run --rm red_team agent     # scripted brain
+BRAIN=llm ANTHROPIC_API_KEY=sk-... docker compose run --rm red_team agent
+```
 
 Other red-team subcommands:
 

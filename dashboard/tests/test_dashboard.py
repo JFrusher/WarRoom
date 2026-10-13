@@ -33,3 +33,17 @@ def test_event_without_points_still_feeds(client):
     snap = client.get("/state").get_json()
     assert snap["scores"]["red"] == 0
     assert snap["events"][-1]["kind"] == "exploit_attempt"
+
+
+def test_thought_event_is_kept_in_feed(client):
+    client.post("/ingest", json={"team": "red", "kind": "thought",
+                                 "rationale": "pivoting to cmdi", "action": "attack"})
+    events = client.get("/state").get_json()["events"]
+    assert any(e.get("kind") == "thought" and e.get("rationale") == "pivoting to cmdi"
+               for e in events)
+
+
+def test_mitigation_event_flips_patch_panel(client):
+    client.post("/ingest", json={"team": "blue", "kind": "mitigation", "vector": "sqli"})
+    snap = client.get("/state").get_json()
+    assert snap["mitigations"]["sqli"] is True

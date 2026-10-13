@@ -67,6 +67,10 @@ def ingest():
         points = event.get("points")
         if team in ("red", "blue") and isinstance(points, (int, float)):
             _state["scores"][team] += int(points)
+        # Honor patch events directly, so the panel is right even when the
+        # target poll is unavailable (the poll still overrides when it runs).
+        if event.get("kind") == "mitigation" and event.get("vector"):
+            _state["mitigations"][event["vector"]] = True
         if event.get("kind") != "heartbeat":
             _state["events"].append(event)
         snapshot = _snapshot()

@@ -92,3 +92,28 @@ def test_behaviour_detects_idor_enumeration():
 def test_throttle_ip_persists():
     assert state.throttle_ip("10.0.0.7") is True
     assert "10.0.0.7" in json.loads(settings.THROTTLE_FILE.read_text())
+
+
+from src import strategy
+from agent_core.decision import Decision
+
+def test_scripted_blue_patches_unpatched_hit_first():
+    obs = {"ip": "1.2.3.4", "vectors": ["sqli"], "score": 10, "patched": [],
+           "blocked": False, "throttled": False}
+    d = strategy.scripted_blue(obs)
+    assert d.action == "patch" and d.args["vector"] == "sqli"
+
+def test_scripted_blue_blocks_over_threshold_once_patched():
+    obs = {"ip": "1.2.3.4", "vectors": ["sqli"], "score": 30, "patched": ["sqli"],
+           "blocked": False, "throttled": False}
+    assert strategy.scripted_blue(obs).action == "block"
+
+def test_scripted_blue_waits_when_nothing_to_do():
+    obs = {"ip": "1.2.3.4", "vectors": ["sqli"], "score": 5, "patched": ["sqli"],
+           "blocked": False, "throttled": False}
+    assert strategy.scripted_blue(obs).action == "wait"
+
+def test_dispatch_patch_records_and_is_idempotent():
+    st = strategy.BlueState()
+    strategy.dispatch_blue(st, Decision("patch", {"vector": "sqli"}, "x"))
+    assert "sqli" in st.patched

@@ -1,61 +1,65 @@
 <!doctype html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>War Zone - Live</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"></script>
+  <title>War Zone</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <script src="/static/vendor/socket.io.min.js"></script>
 </head>
-<body class="h-full bg-slate-950 text-slate-100 antialiased">
-  <div class="mx-auto max-w-6xl px-4 py-8">
-    <header class="mb-8 flex items-center justify-between">
-      <h1 class="text-2xl font-semibold tracking-tight">War Zone <span class="text-slate-500">live</span></h1>
-      <div class="flex items-center gap-2 text-xs">
-        <span id="conn-dot" class="h-2 w-2 rounded-full bg-rose-500"></span>
-        <span id="conn-text" class="text-slate-400">connecting</span>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <h1 class="brand">WAR ZONE <small>cyber range</small></h1>
+      <div class="status">
+        <span><span id="conn-dot" class="dot off"></span><span id="conn-text">connecting</span></span>
+        <span>SLA <b id="uptime" class="tnum">100.0%</b></span>
       </div>
     </header>
 
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">Score</h2>
-        <div class="mb-4 flex justify-around text-center">
-          <div>
-            <div id="score-red" class="text-3xl font-bold text-rose-400">0</div>
-            <div class="text-xs text-slate-500">Red</div>
-          </div>
-          <div>
-            <div id="score-blue" class="text-3xl font-bold text-sky-400">0</div>
-            <div class="text-xs text-slate-500">Blue</div>
-          </div>
+    <section class="score">
+      <div class="team red">
+        <div class="who"><b>Red</b> attacker</div>
+        <div class="pts tnum" id="score-red">0</div>
+      </div>
+      <div class="spine">
+        <div class="meter">
+          <div class="m-red" id="bar-red" style="width:50%"></div>
+          <div class="m-blue" id="bar-blue" style="width:50%"></div>
         </div>
-        <canvas id="score-chart" height="140"></canvas>
-      </section>
-
-      <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">Service SLA</h2>
-        <div id="uptime" class="text-4xl font-bold text-emerald-400">100%</div>
-        <p class="mt-1 text-xs text-slate-500">target uptime</p>
-        <h3 class="mt-6 mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Patches</h3>
-        <div id="mitigations" class="flex flex-wrap gap-2"></div>
-      </section>
-
-      <section class="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">Vectors seen</h2>
-        <div id="vector-tally" class="space-y-2 text-sm text-slate-300"></div>
-      </section>
-    </div>
-
-    <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-      <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">ATT&amp;CK techniques detected</h2>
-      <div id="attack" class="flex flex-wrap gap-2 text-xs text-slate-300"></div>
+        <div class="readout"><span>attack</span><span>defence</span></div>
+        <div class="flag">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 22V4M4 4l9 4-9 4"/>
+          </svg>
+          flag <b id="flag-state">live</b>, rotates on a timer
+        </div>
+      </div>
+      <div class="team blue">
+        <div class="who"><b>Blue</b> defender</div>
+        <div class="pts tnum" id="score-blue">0</div>
+      </div>
     </section>
 
-    <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-      <h2 class="mb-4 text-sm font-medium uppercase tracking-wide text-slate-400">Attack &amp; defence feed</h2>
-      <ul id="feed" class="space-y-1 font-mono text-xs"></ul>
+    <section class="cols">
+      <div class="col">
+        <h2>Attack surface</h2>
+        <div id="vector-tally"></div>
+      </div>
+      <div class="col">
+        <h2>Defences</h2>
+        <div id="mitigations"></div>
+      </div>
+    </section>
+
+    <section class="logwrap">
+      <div class="loghead">
+        <h2>Event log</h2>
+        <div class="tech" id="attack"></div>
+      </div>
+      <ol id="feed"></ol>
     </section>
   </div>
 

@@ -9,7 +9,8 @@ import argparse
 import logging
 import sys
 
-from src import campaign, client, profiles, recon, report, submit
+import agent_core
+from src import campaign, client, profiles, recon, report, strategy, submit
 from src.errors import ExploitFailed, RedTeamError
 from src.exploits import cmdi, idor, jwt, sqli, ssrf, ssti, xss
 
@@ -72,6 +73,15 @@ def cmd_campaign(sess) -> int:
     return 0 if covered else 2
 
 
+def cmd_agent(sess) -> int:
+    state = strategy.RedState(sess=sess, recon=recon.run(sess))
+    decide = strategy.make_red_policy(sess)
+    agent_core.drive(lambda: strategy.observe_red(state), decide,
+                     lambda d: strategy.dispatch_red(state, d), max_steps=12)
+    print(f"captured {sorted(state.captured)}")
+    return 0 if state.captured else 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="red", description="War Zone red-team agent")
     parser.add_argument("--profile", choices=["loud", "stealth"], default="loud",
@@ -87,6 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("jwt", help="run the JWT alg=none exploit")
     sub.add_parser("full-auto", help="recon, exploit every vector, and submit")
     sub.add_parser("campaign", help="run the kill-chain in ATT&CK order")
+    sub.add_parser("agent", help="run the policy-driven brain (BRAIN=scripted|llm)")
     return parser
 
 
@@ -103,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_full_auto(sess)
         if args.command == "campaign":
             return cmd_campaign(sess)
+        if args.command == "agent":
+            return cmd_agent(sess)
         return cmd_single(sess, args.command)
     except RedTeamError as exc:
         log.error("%s", exc)
